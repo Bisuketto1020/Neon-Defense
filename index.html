@@ -1,0 +1,3520 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>NEON DEFENSE v1.3 - 像素塔防(無止盡模式)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: #05060c;
+    color: #e6f1ff;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    user-select: none;
+  }
+  #game-wrap {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(ellipse at top, #1a0a3a 0%, #05060c 60%),
+      #05060c;
+  }
+  #main {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background: linear-gradient(180deg, #0a0e1f, #050810);
+    border: 2px solid #00ffe1;
+    box-shadow: 0 0 30px #00ffe188, inset 0 0 30px #00ffe111;
+    border-radius: 8px;
+  }
+  #left-panel {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  canvas {
+    background: #02030a;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    display: block;
+    border: 2px solid #ff00ea;
+    box-shadow: 0 0 20px #ff00ea66;
+    /* v1.3:不被 flex 壓縮,確保每格永遠是正方形 */
+    flex-shrink: 0;
+  }
+  .panel {
+    background: #0c1330;
+    border: 1px solid #00ffe1;
+    border-radius: 6px;
+    padding: 10px;
+  }
+  .panel h3 {
+    color: #00ffe1;
+    font-size: 12px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    text-shadow: 0 0 6px #00ffe1;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    padding: 3px 0;
+    color: #d0e9ff;
+  }
+  .stat-row .v { color: #ffe600; font-weight: bold; text-shadow: 0 0 4px #ffe60088; }
+  .stat-row .v.hp { color: #ff4d6d; text-shadow: 0 0 4px #ff4d6d88;}
+  .stat-row .v.gold { color: #ffd700; text-shadow: 0 0 4px #ffd70088;}
+
+  #tower-list {
+    max-height: 296px;
+    overflow-y: auto;
+  }
+  .tower-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    margin-bottom: 6px;
+    background: #131a3d;
+    border: 1px solid #2a3870;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    font-size: 11px;
+  }
+  .tower-btn:hover:not(.disabled) {
+    background: #1c2660;
+    border-color: #00ffe1;
+    box-shadow: 0 0 8px #00ffe166;
+  }
+  .tower-btn.selected {
+    background: #1c2660;
+    border-color: #ffe600;
+    box-shadow: 0 0 10px #ffe60088;
+  }
+  .tower-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .tower-icon {
+    width: 28px;
+    height: 28px;
+    background: #02030a;
+    border: 1px solid #555;
+    flex-shrink: 0;
+  }
+  .tower-info { flex: 1; }
+  .tower-info .name { color: #fff; font-weight: bold; font-size: 11px; }
+  .tower-info .cost { color: #ffd700; font-size: 10px; }
+  .tower-info .desc { color: #99aabb; font-size: 9px; margin-top: 1px; }
+
+  button.action {
+    background: linear-gradient(180deg, #00ffe1, #00a99d);
+    color: #02030a;
+    border: none;
+    padding: 8px 12px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 12px;
+    box-shadow: 0 0 10px #00ffe188;
+  }
+  button.action:hover { box-shadow: 0 0 16px #00ffe1; transform: translateY(-1px); }
+  button.action:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  button.action.danger { background: linear-gradient(180deg, #ff4d6d, #b22d4a); box-shadow: 0 0 10px #ff4d6d88; color: #fff;}
+  button.action.selected { background: linear-gradient(180deg, #ffe600, #c9a800); box-shadow: 0 0 12px #ffe600aa; }
+
+  #right-panel { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  #log {
+    flex: 1;
+    background: #0c1330;
+    border: 1px solid #00ffe1;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 10px;
+    overflow-y: auto;
+    max-height: 240px;
+    color: #aac9ee;
+    line-height: 1.4;
+  }
+  #log .e-good { color: #00ffe1; }
+  #log .e-bad { color: #ff4d6d; }
+  #log .e-warn { color: #ffe600; }
+
+  #tower-info-panel { min-height: 130px; }
+  .tinfo-row { font-size: 11px; padding: 2px 0; display: flex; justify-content: space-between; }
+  .tinfo-row .l { color: #99aabb;}
+  .tinfo-row .r { color: #ffe600;}
+
+  #title-screen, #end-screen, #buff-screen {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 3, 10, 0.93);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    text-align: center;
+  }
+  #buff-screen h2 {
+    font-size: 34px; letter-spacing: 5px; margin-bottom: 8px;
+    color: #ffe600; text-shadow: 0 0 18px #ffe600aa;
+  }
+  #buff-screen p { color: #d0e9ff; font-size: 14px; margin-bottom: 22px; }
+  #buff-cards { display: flex; gap: 18px; }
+  .buff-card {
+    width: 200px; padding: 20px 16px;
+    background: linear-gradient(180deg, #12183a, #0a0e22);
+    border: 2px solid #2a3870; border-radius: 8px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .buff-card:hover {
+    border-color: #ffe600;
+    box-shadow: 0 0 20px #ffe60088;
+    transform: translateY(-4px);
+  }
+  .buff-card .bc-cat {
+    font-size: 11px; color: #00ffe1; letter-spacing: 2px; margin-bottom: 8px;
+  }
+  .buff-card .bc-name {
+    font-size: 19px; color: #fff; font-weight: bold; margin-bottom: 10px;
+  }
+  .buff-card .bc-desc { font-size: 12px; color: #aac9ee; line-height: 1.5; }
+  #title-screen h1 {
+    font-size: 64px;
+    color: #00ffe1;
+    text-shadow: 0 0 24px #00ffe1, 0 0 40px #ff00ea;
+    letter-spacing: 8px;
+    margin-bottom: 12px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { text-shadow: 0 0 24px #00ffe1, 0 0 40px #ff00ea; }
+    50%      { text-shadow: 0 0 32px #00ffe1, 0 0 60px #ff00ea; }
+  }
+  #title-screen .sub { color: #ff00ea; letter-spacing: 4px; margin-bottom: 32px; }
+  #title-screen .controls {
+    color: #d0e9ff;
+    font-size: 13px;
+    line-height: 1.8;
+    background: #0c1330;
+    border: 1px solid #00ffe1;
+    padding: 18px 28px;
+    margin-bottom: 32px;
+    max-width: 540px;
+    border-radius: 6px;
+  }
+  #title-screen .controls span { color: #ffe600; }
+  #title-screen button { font-size: 20px; padding: 14px 36px; }
+
+  #difficulty-section {
+    background: #0c1330;
+    border: 1px solid #ff00ea;
+    padding: 16px 24px;
+    margin-bottom: 24px;
+    border-radius: 6px;
+    box-shadow: 0 0 16px #ff00ea44;
+  }
+  #difficulty-section h3 {
+    color: #ff00ea;
+    font-size: 14px;
+    letter-spacing: 4px;
+    margin-bottom: 10px;
+    text-shadow: 0 0 8px #ff00ea88;
+  }
+  .diff-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .diff-btn {
+    background: #131a3d;
+    border: 1px solid #2a3870;
+    color: #d0e9ff;
+    padding: 8px 0;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 3px;
+    transition: all 0.15s;
+  }
+  .diff-btn:hover { background: #1c2660; border-color: #00ffe1; }
+  .diff-btn.active {
+    background: linear-gradient(180deg, #ff00ea, #aa00aa);
+    color: #fff;
+    border-color: #ffe600;
+    box-shadow: 0 0 12px #ff00ea;
+    transform: scale(1.1);
+  }
+  #diff-desc {
+    color: #ffe600;
+    font-size: 12px;
+    text-align: center;
+    line-height: 1.5;
+    min-height: 36px;
+  }
+  #diff-desc .multiplier { color: #ff4d6d; font-weight: bold; }
+  #diff-desc .unlock { color: #00ffe1; }
+
+  /* UI difficulty indicator */
+  .stat-row .v.diff { color: #ff00ea; text-shadow: 0 0 4px #ff00ea88;}
+
+  #end-screen h2 { font-size: 48px; letter-spacing: 6px; margin-bottom: 16px; }
+  #end-screen.win h2 { color: #00ff88; text-shadow: 0 0 20px #00ff88; }
+  #end-screen.lose h2 { color: #ff4d6d; text-shadow: 0 0 20px #ff4d6d; }
+  #end-screen p { font-size: 16px; margin-bottom: 8px; color: #d0e9ff; }
+  #end-screen button { margin-top: 24px; font-size: 16px; padding: 12px 28px; }
+
+  .btn-row { display: flex; gap: 6px; }
+  .btn-row button { flex: 1; }
+  .mute-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: #0c1330;
+    color: #00ffe1;
+    border: 1px solid #00ffe1;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-family: inherit;
+    border-radius: 4px;
+    z-index: 50;
+  }
+</style>
+</head>
+<body>
+<div id="game-wrap">
+  <div id="main">
+    <div id="left-panel">
+      <div class="panel">
+        <h3>狀態 STATUS</h3>
+        <div class="stat-row"><span>核心生命</span><span class="v hp" id="ui-lives">20</span></div>
+        <div class="stat-row"><span>能源 ⚡</span><span class="v gold" id="ui-gold">200</span></div>
+        <div class="stat-row"><span>難度</span><span class="v diff" id="ui-difficulty">1</span></div>
+        <div class="stat-row"><span>波次</span><span class="v" id="ui-wave">0 ∞</span></div>
+        <div class="stat-row"><span>分數</span><span class="v" id="ui-score">0</span></div>
+        <div class="stat-row"><span>部署</span><span class="v" id="ui-towers">0/10</span></div>
+        <div class="stat-row"><span>剩餘敵人</span><span class="v" id="ui-enemies">0</span></div>
+      </div>
+      <div class="panel">
+        <h3>建造 BUILD</h3>
+        <div id="tower-list"></div>
+      </div>
+      <div class="btn-row">
+        <button class="action" id="start-wave-btn">下一波</button>
+      </div>
+      <div class="btn-row">
+        <button class="action" id="speed-btn">2x</button>
+        <button class="action" id="auto-btn">自動:關</button>
+      </div>
+    </div>
+
+    <canvas id="game" width="960" height="640"></canvas>
+
+    <div id="right-panel">
+      <div class="panel" id="tower-info-panel">
+        <h3>單位資訊</h3>
+        <div id="tower-info-body" style="color:#99aabb; font-size:11px;">點選地圖上的塔查看資訊</div>
+      </div>
+      <div class="panel">
+        <h3>戰況 LOG</h3>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="mute-btn" id="mute-btn">[ 音效: 開 ]</button>
+
+<div id="title-screen">
+  <h1>NEON DEFENSE</h1>
+  <div class="sub">// 像素科幻塔防 //</div>
+  <div class="controls">
+    <div><span>►</span> 在左側面板選擇單位,點地圖空格放置</div>
+    <div><span>►</span> 點選已放置的塔可升級或拆除回收</div>
+    <div><span>►</span> 友軍機甲可放在路徑上阻擋敵人</div>
+    <div><span>►</span> <span>無止盡模式</span>:波次無上限,每波越來越強,撐越久分數越高</div>
+    <div><span>►</span> 每 <span>5 波</span> 出現 Boss,敵人血量/防禦隨波次持續成長</div>
+    <div><span>►</span> 難度越高敵人越強,並解鎖 <span>盾兵/治療/狂戰士/幻影</span> 等敵人</div>
+    <div><span>►</span> 後段波次會出現 <span>分裂體/召喚者/再生者/干擾者</span> 等特殊敵人</div>
+    <div><span>►</span> 軌道砲是 <span>直線攻擊</span>,選取後按 <span>R</span> 鍵旋轉部署方向</div>
+    <div><span>►</span> 鍵盤 <span>1-9</span> 快速選擇單位 / <span>R</span> 轉向 / <span>空白鍵</span> 開始下一波</div>
+  </div>
+  <div id="difficulty-section">
+    <h3>// 選擇難度 //</h3>
+    <div class="diff-grid" id="diff-grid"></div>
+    <div id="diff-desc"></div>
+  </div>
+  <button class="action" id="play-btn">啟動防禦系統</button>
+</div>
+
+<div id="end-screen" style="display:none;">
+  <h2 id="end-title"></h2>
+  <p id="end-msg"></p>
+  <p id="end-stats"></p>
+  <button class="action" id="restart-btn">重新開始</button>
+</div>
+
+<div id="buff-screen" style="display:none;">
+  <h2>★ 選擇強化 ★</h2>
+  <p>撐過第 <span id="buff-wave">5</span> 波 — 選擇一項永久強化</p>
+  <div id="buff-cards"></div>
+</div>
+
+<script>
+// =========================================================================
+// NEON DEFENSE - 像素科幻塔防
+// =========================================================================
+(() => {
+'use strict';
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const W = canvas.width, H = canvas.height;
+const TILE = 40;
+const COLS = W / TILE, ROWS = H / TILE; // 24 x 16
+
+// ---------------- Audio (Web Audio API) ----------------
+const AudioFX = (() => {
+  let actx = null;
+  let muted = false;
+  function ensure() {
+    if (!actx) {
+      try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    }
+    if (actx && actx.state === 'suspended') actx.resume();
+  }
+  function tone(freq, dur, type='square', vol=0.08, slide=0) {
+    if (muted) return;
+    ensure();
+    if (!actx) return;
+    const t = actx.currentTime;
+    const o = actx.createOscillator();
+    const g = actx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq+slide), t+dur);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t+0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(t); o.stop(t+dur+0.02);
+  }
+  function noise(dur, vol=0.1, lowpass=2000) {
+    if (muted) return;
+    ensure();
+    if (!actx) return;
+    const t = actx.currentTime;
+    const buf = actx.createBuffer(1, actx.sampleRate*dur, actx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * (1-i/d.length);
+    const s = actx.createBufferSource(); s.buffer = buf;
+    const f = actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lowpass;
+    const g = actx.createGain(); g.gain.value = vol;
+    s.connect(f); f.connect(g); g.connect(actx.destination);
+    s.start(t);
+  }
+  return {
+    laser: () => tone(900, 0.08, 'square', 0.06, -500),
+    plasma:() => { tone(220, 0.18, 'sawtooth', 0.08, -100); noise(0.08, 0.04, 800); },
+    cryo:  () => tone(1400, 0.15, 'sine', 0.05, -800),
+    rail:  () => { tone(140, 0.05, 'square', 0.1); tone(2200,0.12,'sawtooth',0.07,-1800); },
+    tesla: () => { tone(1900,0.05,'square',0.05,-400); noise(0.14,0.05,5000); tone(3400,0.08,'sawtooth',0.04,-1200); },
+    sniper:() => { tone(2600,0.05,'square',0.07,-2000); noise(0.06,0.07,7000); },
+    poison:() => { tone(360,0.16,'sine',0.05,-160); noise(0.12,0.035,1100); },
+    place: () => { tone(600,0.05,'square',0.07); tone(900,0.06,'square',0.06); },
+    upgrade:() => {
+      // 上行琶音
+      [523, 659, 784, 1046, 1319, 1568].forEach((f,i) => {
+        setTimeout(() => tone(f, 0.14, 'triangle', 0.09), i*55);
+      });
+      // 高頻閃光音
+      setTimeout(() => tone(2093, 0.25, 'sine', 0.07, -800), 200);
+      // 低頻共鳴
+      setTimeout(() => tone(130, 0.4, 'sine', 0.06), 50);
+      // 上行掃頻
+      setTimeout(() => tone(400, 0.5, 'sawtooth', 0.04, 2000), 100);
+      // 結尾鈴聲
+      setTimeout(() => { tone(2637, 0.18, 'triangle', 0.09); tone(3136, 0.22, 'triangle', 0.08); }, 400);
+    },
+    sell:  () => { tone(440,0.06,'sine',0.07); tone(330,0.08,'sine',0.06,-50); },
+    hit:   () => noise(0.05, 0.05, 3000),
+    explode:() => { noise(0.25, 0.12, 1200); tone(80, 0.25, 'sawtooth', 0.08, -40); },
+    death: () => { tone(220, 0.15, 'square', 0.06, -100); noise(0.1, 0.06, 1500); },
+    waveStart: () => { tone(440,0.1,'square',0.09); tone(660,0.1,'square',0.09); tone(880,0.15,'square',0.09);},
+    lifeLost:() => { tone(200,0.2,'sawtooth',0.1,-100); noise(0.15,0.08,500); },
+    win:   () => { [523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,0.18,'triangle',0.1),i*120));},
+    lose:  () => { [392,330,262,196].forEach((f,i)=>setTimeout(()=>tone(f,0.25,'sawtooth',0.1),i*160));},
+    deploy:() => { tone(500,0.08,'square',0.07); tone(700,0.08,'square',0.07); },
+    setMuted: m => { muted = m; },
+    isMuted: () => muted
+  };
+})();
+
+// ---------------- Path ----------------
+// Path waypoints in pixel coordinates
+const PATH = [
+  {x: -20, y: 220},
+  {x: 180, y: 220},
+  {x: 180, y: 60},
+  {x: 540, y: 60},
+  {x: 540, y: 380},
+  {x: 260, y: 380},
+  {x: 260, y: 540},
+  {x: 780, y: 540},
+  {x: 780, y: 220},
+  {x: 980, y: 220}
+];
+
+// Mark path tiles as not buildable
+const buildGrid = []; // [col][row] = true if buildable
+for (let c=0;c<COLS;c++){
+  buildGrid[c] = [];
+  for (let r=0;r<ROWS;r++) buildGrid[c][r] = true;
+}
+// ---------------- 地形障礙 ----------------
+// v5:大量擴充障礙物填滿地圖。與路徑衝突的會自動被 markObstacles 過濾掉
+const OBSTACLES = [
+  // ── 頂部邊緣 (row 0)
+  {col: 0,  row: 0,  kind: 'wreck'},
+  {col: 6,  row: 0,  kind: 'crystal'},
+  {col: 10, row: 0,  kind: 'rock'},
+  {col: 17, row: 0,  kind: 'wreck'},
+  {col: 23, row: 0,  kind: 'crystal'},
+  // ── 上區 (row 2-3)
+  {col: 2,  row: 2,  kind: 'rock'},
+  {col: 8,  row: 2,  kind: 'crystal'},
+  {col: 11, row: 3,  kind: 'wreck'},
+  {col: 14, row: 2,  kind: 'rock'},
+  {col: 17, row: 3,  kind: 'crystal'},
+  {col: 21, row: 2,  kind: 'wreck'},
+  // ── 中上 (row 4-5)
+  {col: 0,  row: 4,  kind: 'crystal'},
+  {col: 6,  row: 4,  kind: 'rock'},
+  {col: 9,  row: 5,  kind: 'wreck'},
+  {col: 15, row: 4,  kind: 'crystal'},
+  {col: 22, row: 4,  kind: 'rock'},
+  // ── 中區 (row 6-7)
+  {col: 2,  row: 6,  kind: 'rock'},
+  {col: 10, row: 6,  kind: 'wreck'},
+  {col: 16, row: 7,  kind: 'crystal'},
+  {col: 21, row: 6,  kind: 'wreck'},
+  // ── 中下 (row 8-9)
+  {col: 0,  row: 8,  kind: 'wreck'},
+  {col: 3,  row: 8,  kind: 'crystal'},
+  {col: 8,  row: 8,  kind: 'rock'},
+  {col: 17, row: 9,  kind: 'rock'},
+  {col: 21, row: 8,  kind: 'rock'},
+  // ── 下區 (row 10-11)
+  {col: 2,  row: 11, kind: 'rock'},
+  {col: 4,  row: 10, kind: 'wreck'},
+  {col: 9,  row: 11, kind: 'crystal'},
+  {col: 13, row: 11, kind: 'wreck'},
+  {col: 17, row: 10, kind: 'rock'},
+  {col: 22, row: 11, kind: 'crystal'},
+  // ── 中下 (row 12)
+  {col: 1,  row: 12, kind: 'wreck'},
+  {col: 4,  row: 12, kind: 'crystal'},
+  {col: 11, row: 12, kind: 'rock'},
+  // ── 底部邊緣 (row 14-15)
+  {col: 2,  row: 15, kind: 'rock'},
+  {col: 5,  row: 14, kind: 'wreck'},
+  {col: 11, row: 15, kind: 'crystal'},
+  {col: 15, row: 15, kind: 'wreck'},
+  {col: 21, row: 14, kind: 'rock'},
+  {col: 23, row: 15, kind: 'crystal'},
+];
+
+function markPath() {
+  // mark all tiles within radius along each segment as not buildable
+  for (let i=0;i<PATH.length-1;i++){
+    const a = PATH[i], b = PATH[i+1];
+    const steps = Math.ceil(Math.hypot(b.x-a.x, b.y-a.y)/4);
+    for (let s=0;s<=steps;s++){
+      const t = s/steps;
+      const px = a.x + (b.x-a.x)*t;
+      const py = a.y + (b.y-a.y)*t;
+      for (let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){
+        const c = Math.floor(px/TILE)+dc;
+        const r = Math.floor(py/TILE)+dr;
+        const ddx = px - (c*TILE + TILE/2);
+        const ddy = py - (r*TILE + TILE/2);
+        if (Math.hypot(ddx,ddy) < 30) {
+          if (c>=0&&c<COLS&&r>=0&&r<ROWS) buildGrid[c][r] = false;
+        }
+      }
+    }
+  }
+  // Reserve start & end tiles
+  buildGrid[0][5] = false; buildGrid[23][5] = false;
+}
+markPath();
+
+// 標記障礙物為不可建造,並驗證沒有與路徑衝突(若衝突就跳過)
+function markObstacles() {
+  const valid = [];
+  for (const o of OBSTACLES) {
+    if (o.col<0 || o.col>=COLS || o.row<0 || o.row>=ROWS) continue;
+    // 若該格已是路徑,跳過(避免阻擋路徑)
+    if (!buildGrid[o.col][o.row]) {
+      // 若是路徑且非邊界保留格,還是跳過
+      continue;
+    }
+    buildGrid[o.col][o.row] = false;
+    o.isObstacle = true;
+    valid.push(o);
+  }
+  OBSTACLES.length = 0;
+  for (const v of valid) OBSTACLES.push(v);
+}
+markObstacles();
+
+// v1.3:障礙物所在格集合,供子彈碰撞判定使用
+const obstacleTiles = new Set();
+for (const o of OBSTACLES) obstacleTiles.add(o.col + ',' + o.row);
+
+// 繪製障礙物
+function drawObstacles() {
+  for (const o of OBSTACLES) {
+    const x = o.col*TILE + TILE/2;
+    const y = o.row*TILE + TILE/2;
+    drawObstaclePixel(ctx, x, y, o.kind);
+  }
+}
+function drawObstaclePixel(ctx, x, y, kind) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (kind === 'rock') {
+    // 隕石/岩石
+    ctx.fillStyle = '#2a2a3a';
+    ctx.fillRect(-16, -12, 32, 24);
+    ctx.fillStyle = '#3d3d52';
+    ctx.fillRect(-14, -14, 28, 4);
+    ctx.fillRect(-12, -10, 24, 4);
+    ctx.fillRect(-14, 8, 28, 4);
+    ctx.fillStyle = '#555570';
+    ctx.fillRect(-10, -6, 20, 12);
+    ctx.fillStyle = '#1a1a26';
+    ctx.fillRect(-6, -2, 4, 4);
+    ctx.fillRect(2, 0, 3, 3);
+    ctx.fillStyle = '#777';
+    ctx.fillRect(-4, -8, 2, 2);
+    ctx.fillRect(6, -4, 2, 2);
+  } else if (kind === 'wreck') {
+    // 戰艦殘骸
+    ctx.fillStyle = '#1a1a2a';
+    ctx.fillRect(-16, -8, 32, 16);
+    ctx.fillStyle = '#3a3a4a';
+    ctx.fillRect(-14, -12, 8, 20);
+    ctx.fillRect(0, -10, 12, 18);
+    ctx.fillStyle = '#666';
+    ctx.fillRect(-12, -10, 4, 4);
+    ctx.fillRect(2, -8, 4, 4);
+    ctx.fillStyle = '#cc3300';
+    ctx.fillRect(-10, -2, 3, 3);
+    ctx.fillRect(4, 0, 3, 3);
+    ctx.fillStyle = '#666';
+    ctx.fillRect(-14, 4, 28, 3);
+    // 燒焦邊緣
+    ctx.fillStyle = '#220011';
+    ctx.fillRect(8, -12, 8, 4);
+    ctx.fillRect(-16, 8, 8, 4);
+  } else if (kind === 'crystal') {
+    // 能量水晶簇
+    ctx.fillStyle = '#1a0033';
+    ctx.fillRect(-14, -2, 28, 14);
+    ctx.fillStyle = '#440088';
+    // 三個水晶
+    ctx.beginPath();
+    ctx.moveTo(-10, 12); ctx.lineTo(-6, -10); ctx.lineTo(-2, 12); ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-2, 12); ctx.lineTo(2, -14); ctx.lineTo(8, 12); ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(6, 12); ctx.lineTo(10, -6); ctx.lineTo(14, 12); ctx.closePath();
+    ctx.fill();
+    // 高光
+    ctx.fillStyle = '#aa44ff';
+    ctx.fillRect(-7, -8, 2, 14);
+    ctx.fillRect(1, -12, 2, 16);
+    ctx.fillRect(9, -4, 2, 12);
+    // 微光點
+    const tw = Math.sin(Game.time*4)*0.5 + 0.5;
+    ctx.fillStyle = `rgba(255,150,255,${0.5+tw*0.5})`;
+    ctx.fillRect(-6, -6, 2, 2);
+    ctx.fillRect(2, -10, 2, 2);
+    ctx.fillRect(10, -2, 2, 2);
+  }
+  ctx.restore();
+}
+
+// ---------------- Tower defs ----------------
+const TOWER_DEFS = {
+  laser: {
+    // v8: 升級射速提升幅度調低 (5→7→9 改為 5→6→7)
+    name: '雷射砲塔', desc:'快速單體攻擊', cost: 60,
+    range: 110, dmg: 12, fireRate: 5, color:'#00ffe1', proj:'laser',
+    upgrades:[
+      {cost:50, range:120, dmg:22, fireRate:6},
+      {cost:90, range:130, dmg:38, fireRate:7}
+    ]
+  },
+  plasma: {
+    // v5: splash×2, fireRate×1.5
+    name: '電漿砲', desc:'範圍爆炸傷害', cost: 120,
+    range: 130, dmg: 22, fireRate: 1.8, splash: 100, color:'#ff00ea', proj:'plasma',
+    upgrades:[
+      {cost:100, range:140, dmg:42, fireRate:2.4, splash:130},
+      {cost:160, range:150, dmg:75, fireRate:3.0, splash:160}
+    ]
+  },
+  cryo: {
+    // v7: 改為 AOE,減速固定 80%/0.8s 不可疊加,升級主要強化範圍與射速
+    name: '冰凍塔', desc:'範圍減速 80%(不疊加)', cost: 90,
+    range: 120, dmg: 4, fireRate: 3, splash: 60, slow: 0.8, slowDur: 0.8, color:'#66ddff', proj:'cryo',
+    upgrades:[
+      {cost:80,  range:140, dmg:8,  fireRate:4.5, splash: 80, slow: 0.8, slowDur: 0.8},
+      {cost:120, range:160, dmg:14, fireRate:6.0, splash:110, slow: 0.8, slowDur: 0.8}
+    ]
+  },
+  tesla: {
+    // v1.1 新增:鏈電塔 — 閃電在敵人之間連鎖跳躍,傷害逐跳衰減
+    name: '鏈電塔', desc:'閃電連鎖跳躍多個敵人', cost: 100,
+    range: 118, dmg: 20, fireRate: 1.5, color:'#4fc3ff', proj:'tesla', chainCount: 3,
+    upgrades:[
+      {cost:90,  range:128, dmg:38, fireRate:1.9, chainCount: 4},
+      {cost:140, range:138, dmg:66, fireRate:2.3, chainCount: 5}
+    ]
+  },
+  rail: {
+    // v8: 方向性直線攻擊,部署時按 R 旋轉方向,只打直線上的敵人
+    // v14/v1.2/v1.3: 連續削弱 — 傷害與射速持續下調
+    name: '軌道砲', desc:'直線穿透 (放置時按 R 轉向)', cost: 180,
+    range: 2000, dmg: 90, fireRate: 0.8, color:'#ffe600', proj:'rail', pierce: 999,
+    upgrades:[
+      {cost:150, range:2000, dmg:160, fireRate:1.05, pierce:999},
+      {cost:220, range:2000, dmg:275, fireRate:1.35, pierce:999}
+    ]
+  },
+  mech: {
+    // v5: HP×3, 波次結束回血 Lv1/2/3 = 20%/30%/50%
+    name: '友軍機甲', desc:'部署於路徑阻擋敵人,波次結束回血', cost: 100,
+    range: 60, dmg: 8, fireRate: 2, hp: 600, color:'#ffaa00', proj:'mech', isMech:true,
+    waveHealPct: 0.20,  // Lv1
+    upgrades:[
+      {cost:80,  range:65, dmg:15, fireRate:2.5, hp:1050, waveHealPct:0.30},
+      {cost:130, range:70, dmg:28, fireRate:3.5, hp:1650, waveHealPct:0.50}
+    ]
+  },
+  command: {
+    // v1.1 新增:指揮塔 — 不攻擊,持續提升範圍內砲台的傷害與射速
+    // v1.2/v1.3: 連續削弱 — 增益幅度持續下調
+    name: '指揮塔', desc:'增益周圍砲台(不攻擊)', cost: 140,
+    range: 140, dmg: 0, fireRate: 0, color:'#ffb84d', proj:'none',
+    isSupport: true, dmgBonus: 0.12, fireRateBonus: 0.10,
+    upgrades:[
+      {cost:110, range:155, dmgBonus: 0.20, fireRateBonus: 0.16},
+      {cost:170, range:170, dmgBonus: 0.30, fireRateBonus: 0.24}
+    ]
+  },
+  sniper: {
+    // v1.3 新增:狙擊塔 — 超長射程、高單體傷害、射速慢
+    name: '狙擊塔', desc:'超長射程 高傷單體', cost: 130,
+    range: 280, dmg: 80, fireRate: 0.95, color:'#ff6b9d', proj:'sniper',
+    upgrades:[
+      {cost:115, range:340, dmg:155, fireRate:1.1},
+      {cost:180, range:400, dmg:280, fireRate:1.3}
+    ]
+  },
+  poison: {
+    // v1.3 新增:毒素塔 — 命中施加可疊加的持續傷害(DoT,無視防禦),剋制高血/再生敵人
+    name: '毒素塔', desc:'劇毒持續傷害 (可疊加)', cost: 95,
+    range: 118, dmg: 6, fireRate: 2.0, color:'#9be84a', proj:'poison',
+    poison: 14, poisonDur: 3.0,
+    upgrades:[
+      {cost:85,  range:128, dmg:11, fireRate:2.5, poison:28, poisonDur:3.5},
+      {cost:140, range:138, dmg:17, fireRate:3.0, poison:48, poisonDur:4.0}
+    ]
+  }
+};
+const TOWER_ORDER = ['laser','plasma','cryo','tesla','rail','mech','command','sniper','poison'];
+
+// ---------------- Enemy defs ----------------
+// 全域常數 ─ 經濟/部署/難度
+const STARTING_GOLD = 100;
+const WAVE_FIXED_BONUS = 100;
+let MAX_TOWERS = 10; // v1.3:可被「擴充槽位」buff 提升
+const GLOBAL_HP_MULT = 1; // v4:暫時還原 v2 血量倍率,測試經濟是否能通關
+
+const ENEMY_DEFS = {
+  // v7: HP×0.8、防禦÷2、獎勵×1.5
+  scout:    { name:'偵察兵',  hp: 28,  speed: 80, reward: 6,  color:'#88ff88', size: 10, dmg: 1, armor: 0 },
+  soldier:  { name:'士兵',    hp: 72,  speed: 55, reward: 6,  color:'#aaffaa', size: 12, dmg: 1, armor: 0 },
+  tank:     { name:'重裝甲', hp: 256, speed: 30, reward: 18, color:'#ff8866', size: 16, dmg: 2, armor: 2 },
+  drone:    { name:'無人機', hp: 48,  speed: 95, reward: 6,  color:'#ffeeaa', size: 9,  dmg: 1, armor: 0 },
+  elite:    { name:'精英',    hp: 520, speed: 45, reward: 36, color:'#ff66ff', size: 14, dmg: 3, armor: 1 },
+  miniboss: { name:'小型BOSS',hp: 1120,speed: 32, reward: 72, color:'#ff9933', size: 18, dmg: 5, armor: 2 },
+  boss:     { name:'BOSS',    hp: 3600,speed: 28, reward: 180,color:'#ff0066', size: 22, dmg: 10,armor: 3 },
+  // ---- 進階敵人(高難度解鎖) ----
+  shield:   { name:'盾兵',    hp: 176, speed: 40, reward: 18, color:'#8899ff', size: 13, dmg: 2, shield: 0.5, armor: 1 },
+  healer:   { name:'治療單位',hp: 80,  speed: 50, reward: 24, color:'#33ff99', size: 12, dmg: 1, armor: 0, healAmt: 25, healInterval: 1.6, healRadius: 90 },
+  berserker:{ name:'狂戰士',  hp: 152, speed: 60, reward: 18, color:'#ff7733', size: 13, dmg: 2, armor: 0, rageMult: 2.2 },
+  phantom:  { name:'幻影',    hp: 208, speed: 65, reward: 30, color:'#cc88ff', size: 12, dmg: 3, armor: 0, phaseInterval: 2.3, phaseDur: 1.4 },
+  // ---- v1.1 新增:機制怪物 ----
+  // 分裂體:死亡時分裂成 2 隻分裂子體
+  splitter: { name:'分裂體',  hp: 210, speed: 46, reward: 20, color:'#d8e84a', size: 14, dmg: 2, armor: 1, splitInto:'splitling', splitCount: 2 },
+  splitling:{ name:'分裂子體',hp: 46,  speed: 80, reward: 4,  color:'#eef39a', size: 8,  dmg: 1, armor: 0 },
+  // 召喚者:沿路定期召喚小型敵人
+  summoner: { name:'召喚者',  hp: 300, speed: 36, reward: 32, color:'#3fe0b0', size: 15, dmg: 3, armor: 1, summonType:'scout', summonCount: 2, summonInterval: 3.2 },
+  // 再生者:未受攻擊時持續回血
+  regen:    { name:'再生者',  hp: 340, speed: 40, reward: 28, color:'#3ad96b', size: 14, dmg: 3, armor: 1, regenAmt: 42, regenDelay: 1.4 },
+  // 干擾者:定期癱瘓附近砲台
+  disruptor:{ name:'干擾者',  hp: 264, speed: 44, reward: 34, color:'#b35cff', size: 13, dmg: 3, armor: 1, disruptInterval: 3.4, disruptRadius: 96, disruptDur: 1.6 },
+  // ---- v1.3 新增:機制怪物 ----
+  // 衝鋒兵:周期性衝刺(短暫高速)
+  charger:  { name:'衝鋒兵',  hp: 230, speed: 36, reward: 22, color:'#ff5566', size: 13, dmg: 3, armor: 1, chargeInterval: 3.0, chargeDur: 0.8, chargeMult: 3.2 },
+  // 結界使:為周圍敵人提供傷害減免光環
+  aegis:    { name:'結界使',  hp: 286, speed: 40, reward: 30, color:'#5fd0e0', size: 14, dmg: 2, armor: 1, aegisRadius: 90, aegisReduce: 0.35 },
+  // 爆裂體:死亡時癱瘓附近砲台
+  bomber:   { name:'爆裂體',  hp: 196, speed: 50, reward: 22, color:'#ff8a2a', size: 13, dmg: 2, armor: 0, bombRadius: 84, bombDisable: 1.3 }
+};
+
+// ---------------- Waves ----------------
+// Each wave: array of {type, count, interval, delay}
+const WAVES = [
+  // W1 - 入門
+  [{type:'scout', count:8, interval:0.8}],
+  // W2 - 稍密
+  [{type:'scout', count:14, interval:0.55}],
+  // W3 - 大幅提升:多種敵人混合
+  [{type:'soldier', count:14, interval:0.6}, {type:'scout', count:10, interval:0.35, delay:5}, {type:'tank', count:2, interval:2, delay:3}],
+  // W4 - 更密集+加重裝
+  [{type:'scout', count:22, interval:0.28}, {type:'soldier', count:12, interval:0.55, delay:5}, {type:'tank', count:3, interval:1.8, delay:8}],
+  // W5 - ★ 首隻小Boss ★
+  [{type:'tank', count:6, interval:1.4}, {type:'scout', count:14, interval:0.3, delay:2}, {type:'soldier', count:10, interval:0.5, delay:5}, {type:'miniboss', count:1, interval:1, delay:9}],
+  // W6 - 無人機海+士兵支援
+  [{type:'drone', count:28, interval:0.25}, {type:'soldier', count:8, interval:0.6, delay:4}, {type:'tank', count:2, interval:2, delay:8}],
+  // W7 - 重裝鐵流
+  [{type:'soldier', count:20, interval:0.45}, {type:'tank', count:8, interval:1.2, delay:3}, {type:'drone', count:12, interval:0.35, delay:6}],
+  // W8 - ★ 雙小Boss ★
+  [{type:'tank', count:12, interval:0.9}, {type:'soldier', count:18, interval:0.45, delay:3}, {type:'drone', count:15, interval:0.3, delay:6}, {type:'miniboss', count:2, interval:5, delay:8}],
+  // W9 - 高速大量+精英登場
+  [{type:'drone', count:40, interval:0.22}, {type:'tank', count:10, interval:1.0, delay:4}, {type:'elite', count:3, interval:3, delay:10}],
+  // W10 - ★ 雙小Boss + 精英群 ★
+  [{type:'elite', count:5, interval:2.2}, {type:'soldier', count:24, interval:0.4, delay:2}, {type:'tank', count:8, interval:1.0, delay:6}, {type:'miniboss', count:2, interval:6, delay:5}],
+  // W11 - ★ 三小Boss + 全面進攻 ★
+  [{type:'tank', count:18, interval:0.8}, {type:'drone', count:45, interval:0.18, delay:4}, {type:'elite', count:5, interval:2.5, delay:8}, {type:'miniboss', count:3, interval:4, delay:10}],
+  // W12 - 最終戰 BOSS
+  [{type:'boss', count:1, interval:1.0}, {type:'miniboss', count:3, interval:5, delay:2}, {type:'elite', count:7, interval:2.2, delay:4}, {type:'tank', count:20, interval:0.7, delay:6}, {type:'drone', count:50, interval:0.18, delay:12}, {type:'soldier', count:25, interval:0.4, delay:15}]
+];
+
+// ---------------- Game state ----------------
+const Game = {
+  difficulty: 1, // 1..10
+  lives: 20,
+  gold: STARTING_GOLD,
+  wave: 0,
+  score: 0,
+  towers: [],
+  enemies: [],
+  projectiles: [],
+  particles: [],
+  upgradeEffects: [], // 升級華麗動畫
+  lightnings: [],     // v1.1: 鏈電塔閃電效果
+  floatTexts: [],     // v6: 浮動文字(+X⚡ 等)
+  spawnQueue: [], // {type, t}
+  spawnLater: [], // v1.1:延後生成佇列(分裂/召喚),避免迭代中改動陣列
+  waveActive: false,
+  waveCleared: true,
+  selected: null, // tower type to place
+  selectedTower: null, // tower placed
+  placeDir: 0, // v8: 軌道砲部署方向 (弧度) 0=右 PI/2=下 PI=左 3PI/2=上
+  speed: 1,
+  paused: false,
+  ended: false,
+  time: 0,
+  mouse: {x:0,y:0,over:false},
+  starfield: [],
+  hoverTile: null,
+  // v1.2:自動開始下一波
+  autoStart: false,
+  autoCountdown: 0,
+  // v1.2:BOSS 波隨機詛咒(永久累積)
+  debuffs: [],   // 已抽到的 debuff 物件清單(依序)
+  debuffCounts: { dmg:0, rate:0, range:0, espd:0, ehp:0, earm:0, fault:0 },
+  fx: { towerDmg:1, towerRate:1, towerRange:1, enemySpeed:1, enemyHp:1, enemyArmor:0, fault:0 },
+  // v1.3:每 5 波玩家 3 選 1 的強化(永久累積)
+  buffs: [],
+  buffCounts: { tdmg:0, trate:0, trange:0 },
+  maxLives: 20
+};
+const AUTO_DELAY = 4; // 自動開波倒數秒數
+
+// v1.2 BOSS 波詛咒池(玩家選定:砲台減益 / 敵人強化 / 砲台故障)
+const DEBUFF_POOL = [
+  { id:'dmg',   name:'武器衰變', desc:'全砲台傷害 −12%' },
+  { id:'rate',  name:'迴路過熱', desc:'全砲台射速 −12%' },
+  { id:'range', name:'感測干擾', desc:'全砲台射程 −10%' },
+  { id:'espd',  name:'狂暴訊號', desc:'敵人速度 +15%' },
+  { id:'ehp',   name:'裝甲強化', desc:'敵人血量 +20%' },
+  { id:'earm',  name:'力場護盾', desc:'敵人防禦 +1' },
+  { id:'fault', name:'系統故障', desc:'每波隨機 1 座砲台整波當機' }
+];
+// v1.3:debuff 與 buff 的倍率合併計算進 Game.fx
+function recomputeFx() {
+  const c = Game.debuffCounts, b = Game.buffCounts;
+  Game.fx.towerDmg   = Math.pow(0.88, c.dmg)   * Math.pow(1.12, b.tdmg);
+  Game.fx.towerRate  = Math.pow(0.88, c.rate)  * Math.pow(1.12, b.trate);
+  Game.fx.towerRange = Math.pow(0.90, c.range) * Math.pow(1.12, b.trange);
+  Game.fx.enemySpeed = Math.pow(1.15, c.espd);
+  Game.fx.enemyHp    = Math.pow(1.20, c.ehp);
+  Game.fx.enemyArmor = c.earm;
+  Game.fx.fault      = c.fault;
+}
+function rollDebuff() {
+  const pick = DEBUFF_POOL[Math.floor(Math.random()*DEBUFF_POOL.length)];
+  Game.debuffCounts[pick.id] = (Game.debuffCounts[pick.id]||0) + 1;
+  Game.debuffs.push(pick);
+  recomputeFx();
+  log(`☠ BOSS 詛咒:${pick.name} — ${pick.desc}`, 'e-bad');
+}
+
+// v1.3 每 5 波玩家 3 選 1 強化池(玩家選定:砲台強化 / 核心防禦 / 特殊效果)
+const BUFF_POOL = [
+  { id:'tdmg',   cat:'砲台強化', name:'火力強化', desc:'全砲台傷害 +12%' },
+  { id:'trate',  cat:'砲台強化', name:'系統超頻', desc:'全砲台射速 +12%' },
+  { id:'trange', cat:'砲台強化', name:'感測升級', desc:'全砲台射程 +12%' },
+  { id:'maxlife',cat:'核心防禦', name:'裝甲板',   desc:'核心生命上限 +6,並回復 6' },
+  { id:'heal',   cat:'核心防禦', name:'緊急修復', desc:'立即回復 14 點核心生命' },
+  { id:'slot',   cat:'特殊效果', name:'擴充槽位', desc:'部署上限 +1' },
+  { id:'purify', cat:'特殊效果', name:'淨化協議', desc:'移除一個已累積的詛咒' },
+  { id:'refund', cat:'特殊效果', name:'戰術升級', desc:'免費升級隨機一座砲台' }
+];
+function applyBuff(id) {
+  const b = BUFF_POOL.find(x => x.id === id);
+  if (!b) return;
+  Game.buffs.push(b);
+  if (id === 'tdmg')         Game.buffCounts.tdmg++;
+  else if (id === 'trate')   Game.buffCounts.trate++;
+  else if (id === 'trange')  Game.buffCounts.trange++;
+  else if (id === 'maxlife'){ Game.maxLives += 6; Game.lives = Math.min(Game.maxLives, Game.lives + 6); }
+  else if (id === 'heal')    Game.lives = Math.min(Game.maxLives, Game.lives + 14);
+  else if (id === 'slot')    MAX_TOWERS += 1;
+  else if (id === 'purify') {
+    if (Game.debuffs.length) {
+      const d = Game.debuffs.pop();
+      if (Game.debuffCounts[d.id] > 0) Game.debuffCounts[d.id]--;
+    }
+  }
+  else if (id === 'refund') {
+    const ups = Game.towers.filter(t => !t.dead && t.canUpgrade());
+    if (ups.length) {
+      const t = ups[Math.floor(Math.random()*ups.length)];
+      t.level++;
+      if (t.isMech) { t.maxHp = t.stats.hp; t.hp = t.maxHp; }
+      t.upgradeFlash = 1.2;
+      Game.upgradeEffects.push(new UpgradeEffect(t.x, t.y, t.def.color, t.level));
+      AudioFX.upgrade();
+    }
+  }
+  recomputeFx();
+  log(`✦ 強化:${b.name} — ${b.desc}`, 'e-good');
+  updateUI();
+}
+function showBuffChoice() {
+  let pool = BUFF_POOL.slice();
+  if (Game.debuffs.length === 0) pool = pool.filter(x => x.id !== 'purify');
+  for (let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const tmp=pool[i]; pool[i]=pool[j]; pool[j]=tmp; }
+  const choices = pool.slice(0, 3);
+  const cont = document.getElementById('buff-cards');
+  cont.innerHTML = '';
+  document.getElementById('buff-wave').textContent = Game.wave;
+  for (const b of choices) {
+    const card = document.createElement('div');
+    card.className = 'buff-card';
+    card.innerHTML = `<div class="bc-cat">${b.cat}</div><div class="bc-name">${b.name}</div><div class="bc-desc">${b.desc}</div>`;
+    card.addEventListener('click', () => {
+      applyBuff(b.id);
+      document.getElementById('buff-screen').style.display = 'none';
+      Game.paused = false;
+    });
+    cont.appendChild(card);
+  }
+  document.getElementById('buff-screen').style.display = 'flex';
+  Game.paused = true;
+}
+
+// 難度說明
+const DIFFICULTY_INFO = [
+  null,
+  { mult: 1.00, desc: '入門難度,基礎敵人', unlock: '' },
+  { mult: 1.20, desc: '稍難一點',           unlock: '' },
+  { mult: 1.44, desc: '解鎖 盾兵',         unlock: 'shield' },
+  { mult: 1.73, desc: '敵人更強悍',         unlock: '' },
+  { mult: 2.07, desc: '解鎖 治療單位',       unlock: 'healer' },
+  { mult: 2.49, desc: '需要嚴密布陣',       unlock: '' },
+  { mult: 2.99, desc: '解鎖 狂戰士',         unlock: 'berserker' },
+  { mult: 3.58, desc: '嚴峻挑戰',           unlock: '' },
+  { mult: 4.30, desc: '解鎖 幻影',           unlock: 'phantom' },
+  { mult: 9.00, desc: '★ 地獄難度 ★ 敵人血量 ×9,真正的試煉', unlock: '' }
+];
+
+// 取得目前難度的 HP 倍率
+function difficultyMult() {
+  return DIFFICULTY_INFO[Game.difficulty].mult;
+}
+
+// 根據難度生成額外敵人波次
+function getDifficultyExtras(waveNum, diff) {
+  const extras = [];
+  if (diff >= 3 && waveNum >= 3) {
+    extras.push({type:'shield', count: Math.min(5, Math.floor(waveNum/2)+1), interval: 1.4, delay: 3});
+  }
+  if (diff >= 5 && waveNum >= 4) {
+    extras.push({type:'healer', count: Math.min(3, Math.floor(waveNum/4)+1), interval: 2.0, delay: 5});
+  }
+  if (diff >= 7 && waveNum >= 5) {
+    extras.push({type:'berserker', count: Math.min(6, Math.floor(waveNum/2)+1), interval: 1.0, delay: 4});
+  }
+  if (diff >= 9 && waveNum >= 6) {
+    extras.push({type:'phantom', count: Math.min(5, Math.floor(waveNum/3)+1), interval: 1.6, delay: 7});
+  }
+  return extras;
+}
+
+// init starfield
+for (let i=0;i<80;i++){
+  Game.starfield.push({x:Math.random()*W, y:Math.random()*H, s:Math.random()*1.5+0.3, v:Math.random()*0.2+0.05});
+}
+
+// ---------------- Helpers ----------------
+function dist(a,b){return Math.hypot(a.x-b.x, a.y-b.y);}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+function log(msg, cls='') {
+  const el = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = cls;
+  d.innerHTML = '&gt; ' + msg;
+  el.insertBefore(d, el.firstChild);
+  while(el.children.length > 50) el.removeChild(el.lastChild);
+}
+
+// ---------------- Enemy ----------------
+class Enemy {
+  constructor(type, waveBuff=1, opts=null) {
+    const def = ENEMY_DEFS[type];
+    this.type = type;
+    this.def = def;
+    this.waveBuff = waveBuff;
+    // 全域 ×10 難度 + 波次/難度倍率
+    this.maxHp = def.hp * waveBuff * GLOBAL_HP_MULT * Game.fx.enemyHp;
+    this.hp = this.maxHp;
+    this.speed = def.speed;
+    // v1.1:分裂子體/召喚物可從路徑中段生成
+    if (opts && opts.x !== undefined) {
+      this.x = opts.x; this.y = opts.y;
+      this.pathIdx = opts.pathIdx || 0;
+    } else {
+      this.x = PATH[0].x;
+      this.y = PATH[0].y;
+      this.pathIdx = 0;
+    }
+    this.t = 0;
+    this.slowAmt = 0;
+    this.slowTimer = 0;
+    this.dead = false;
+    this.reachedEnd = false;
+    this.blockedBy = null; // a mech blocking us
+    this.attackCd = 0;
+    // v1.1:無止盡模式 — 波次越高敵人額外防禦
+    this.bonusArmor = Math.floor(Math.max(0, Game.wave - 10) / 5);
+    // 進階敵人狀態
+    this.healCd = def.healInterval || 0;
+    this.healPulse = 0;
+    this.phaseCd = (def.phaseInterval || 0) + Math.random();
+    this.phaseTimer = 0;
+    this.invisible = false;
+    // v1.1 機制怪物狀態
+    this.summonCd = (def.summonInterval || 0) + Math.random()*0.5;
+    this.summonPulse = 0;
+    this.regenTimer = 0;       // 距上次受傷的時間
+    this.regenGlow = 0;
+    this.disruptCd = (def.disruptInterval || 0) + Math.random()*0.6;
+    this.disruptPulse = 0;
+    // v1.3 機制怪物狀態
+    this.chargeCd = (def.chargeInterval || 0) + Math.random()*1.0;
+    this.chargeTimer = 0;
+    this.charging = false;
+    this.shieldTimer = 0;   // 結界使提供的減傷剩餘時間
+    this.shieldAmt = 0;
+    this.poisonDps = 0;     // 毒素塔造成的持續傷害
+    this.poisonTimer = 0;
+  }
+  isTargetable() {
+    return !this.dead && !this.reachedEnd && !this.invisible;
+  }
+  update(dt) {
+    if (this.slowTimer > 0) {
+      this.slowTimer -= dt;
+      if (this.slowTimer <= 0) this.slowAmt = 0;
+    }
+    // v1.3 毒素 DoT:每幀扣血(真實傷害,無視防禦),計時歸零則清除
+    if (this.poisonTimer > 0) {
+      this.poisonTimer -= dt;
+      this.takeDamage(this.poisonDps * dt, 0, 0, true);
+      if (this.poisonTimer <= 0) this.poisonDps = 0;
+      if (this.dead) return;
+    }
+    // v1.3 結界使減傷光環計時
+    if (this.shieldTimer > 0) {
+      this.shieldTimer -= dt;
+      if (this.shieldTimer <= 0) this.shieldAmt = 0;
+    }
+    // 治療單位:周期性治療附近敵人
+    if (this.def.healAmt) {
+      this.healCd -= dt;
+      this.healPulse = Math.max(0, this.healPulse - dt*2);
+      if (this.healCd <= 0) {
+        this.healCd = this.def.healInterval;
+        this.healPulse = 1;
+        for (const e of Game.enemies) {
+          if (e === this || e.dead || e.reachedEnd) continue;
+          if (dist(this, e) <= this.def.healRadius) {
+            e.hp = Math.min(e.maxHp, e.hp + this.def.healAmt);
+            spawnParticles(e.x, e.y, '#33ff99', 4);
+          }
+        }
+      }
+    }
+    // 幻影:周期性隱形
+    if (this.def.phaseInterval) {
+      this.phaseCd -= dt;
+      if (this.invisible) {
+        this.phaseTimer -= dt;
+        if (this.phaseTimer <= 0) {
+          this.invisible = false;
+          spawnParticles(this.x, this.y, '#cc88ff', 10);
+        }
+      } else if (this.phaseCd <= 0) {
+        this.invisible = true;
+        this.phaseTimer = this.def.phaseDur;
+        this.phaseCd = this.def.phaseInterval + this.def.phaseDur;
+        spawnParticles(this.x, this.y, '#cc88ff', 10);
+      }
+    }
+    // v1.1 召喚者:沿路定期召喚小型敵人
+    if (this.def.summonType) {
+      this.summonCd -= dt;
+      this.summonPulse = Math.max(0, this.summonPulse - dt*2);
+      if (this.summonCd <= 0) {
+        this.summonCd = this.def.summonInterval;
+        this.summonPulse = 1;
+        // 軟上限:敵人過多時不再召喚,避免效能崩潰
+        if (Game.enemies.length + Game.spawnLater.length < 110) {
+          for (let i=0;i<this.def.summonCount;i++){
+            Game.spawnLater.push({
+              type: this.def.summonType, buff: this.waveBuff,
+              x: this.x + (Math.random()*20-10),
+              y: this.y + (Math.random()*20-10),
+              pathIdx: this.pathIdx
+            });
+          }
+          spawnParticles(this.x, this.y, this.def.color, 10);
+        }
+      }
+    }
+    // v1.1 再生者:一段時間未受攻擊就持續回血
+    if (this.def.regenAmt) {
+      this.regenTimer += dt;
+      this.regenGlow = Math.max(0, this.regenGlow - dt*2);
+      if (this.regenTimer >= this.def.regenDelay && this.hp < this.maxHp && !this.dead) {
+        this.hp = Math.min(this.maxHp, this.hp + this.def.regenAmt * dt);
+        this.regenGlow = 1;
+      }
+    }
+    // v1.1 干擾者:定期癱瘓附近砲台
+    if (this.def.disruptInterval) {
+      this.disruptCd -= dt;
+      this.disruptPulse = Math.max(0, this.disruptPulse - dt*1.5);
+      if (this.disruptCd <= 0) {
+        this.disruptCd = this.def.disruptInterval;
+        this.disruptPulse = 1;
+        for (const t of Game.towers) {
+          if (t.dead) continue;
+          if (dist(this, t) <= this.def.disruptRadius) {
+            t.disabledTimer = Math.max(t.disabledTimer || 0, this.def.disruptDur);
+            spawnParticles(t.x, t.y, this.def.color, 5);
+          }
+        }
+      }
+    }
+
+    // v1.3 衝鋒兵:周期性衝刺(短暫爆發高速)
+    if (this.def.chargeInterval) {
+      this.chargeCd -= dt;
+      if (this.charging) {
+        this.chargeTimer -= dt;
+        if (this.chargeTimer <= 0) this.charging = false;
+      } else if (this.chargeCd <= 0) {
+        this.charging = true;
+        this.chargeTimer = this.def.chargeDur;
+        this.chargeCd = this.def.chargeInterval + this.def.chargeDur;
+        spawnParticles(this.x, this.y, this.def.color, 8);
+      }
+    }
+    // v1.3 結界使:為周圍敵人套用減傷光環
+    if (this.def.aegisRadius) {
+      for (const e of Game.enemies) {
+        if (e === this || e.dead || e.reachedEnd) continue;
+        if (dist(this, e) <= this.def.aegisRadius) {
+          e.shieldTimer = Math.max(e.shieldTimer, 0.3);
+          e.shieldAmt = this.def.aegisReduce;
+        }
+      }
+    }
+
+    // Check if blocked by a mech
+    if (this.blockedBy && (this.blockedBy.dead || dist(this, this.blockedBy) > 30)) {
+      this.blockedBy = null;
+    }
+    if (!this.blockedBy) {
+      // find a mech within touch distance
+      for (const t of Game.towers) {
+        if (t.isMech && !t.dead && dist(this,t) < 22) {
+          this.blockedBy = t;
+          break;
+        }
+      }
+    }
+
+    if (this.blockedBy) {
+      // attack the mech
+      this.attackCd -= dt;
+      if (this.attackCd <= 0) {
+        this.attackCd = 0.6;
+        this.blockedBy.hp -= this.def.dmg * 6;
+        spawnParticles(this.blockedBy.x, this.blockedBy.y, '#ffaa00', 3);
+        if (this.blockedBy.hp <= 0) {
+          this.blockedBy.dead = true;
+          log(`友軍機甲陣亡!`, 'e-bad');
+          AudioFX.explode();
+          spawnParticles(this.blockedBy.x, this.blockedBy.y, '#ffaa00', 20);
+          this.blockedBy = null;
+        }
+      }
+      return;
+    }
+
+    const target = PATH[this.pathIdx+1];
+    if (!target) { this.reachedEnd = true; return; }
+    const dx = target.x - this.x, dy = target.y - this.y;
+    const d = Math.hypot(dx,dy);
+    // 狂戰士:HP越低速度越快
+    let speedMult = 1;
+    if (this.def.rageMult) {
+      const rage = 1 - clamp(this.hp/this.maxHp, 0, 1);
+      speedMult = 1 + rage * (this.def.rageMult - 1);
+    }
+    // v1.3 衝鋒兵衝刺中:速度暴增
+    if (this.charging) speedMult *= this.def.chargeMult;
+    const sp = this.speed * speedMult * Game.fx.enemySpeed * (1 - this.slowAmt) * dt;
+    if (d <= sp) {
+      this.x = target.x; this.y = target.y;
+      this.pathIdx++;
+      if (this.pathIdx >= PATH.length-1) this.reachedEnd = true;
+    } else {
+      this.x += dx/d * sp;
+      this.y += dy/d * sp;
+    }
+    this.t += dt;
+  }
+  takeDamage(amt, slow, slowDur, trueDmg) {
+    // 防禦力:傷害 = max(1, 攻擊力 - 防禦力)。v1.1:無止盡模式額外防禦
+    // v1.3:trueDmg(毒素等持續傷害)無視防禦
+    if (!trueDmg) {
+      const armor = (this.def.armor || 0) + (this.bonusArmor || 0) + Game.fx.enemyArmor;
+      amt = Math.max(1, amt - armor);
+    }
+    // 盾兵:在扣防後再乘 50%
+    if (this.def.shield) amt *= (1 - this.def.shield);
+    // v1.3 結界使:減傷光環
+    if (this.shieldTimer > 0) amt *= (1 - this.shieldAmt);
+    this.hp -= amt;
+    this.regenTimer = 0; // v1.1:受傷後重置再生計時
+    // v7:減速不可疊加 — 只在當前未被減速時才應用,讓 80%/0.8s 變成周期性減速
+    if (slow && this.slowTimer <= 0) {
+      this.slowAmt = slow;
+      this.slowTimer = slowDur;
+    }
+    if (this.hp <= 0 && !this.dead) {
+      this.dead = true;
+      // v8:第 3 波之後,擊殺獎勵減半(波次 >= 4)
+      const rewardMult = Game.wave >= 4 ? 0.5 : 1;
+      const reward = Math.max(1, Math.floor(this.def.reward * rewardMult));
+      Game.gold += reward;
+      Game.score += reward * 2;
+      spawnParticles(this.x, this.y, this.def.color, 12);
+      // v6:擊殺金幣即時顯示 + 浮動 +N⚡ 文字
+      spawnFloatText(this.x, this.y, `+${reward}⚡`, '#ffd700');
+      // v1.1 分裂體:死亡時分裂出小型敵人
+      if (this.def.splitInto && !this.reachedEnd) {
+        for (let i=0;i<(this.def.splitCount||2);i++){
+          Game.spawnLater.push({
+            type: this.def.splitInto, buff: this.waveBuff,
+            x: this.x + (Math.random()*24-12),
+            y: this.y + (Math.random()*24-12),
+            pathIdx: this.pathIdx
+          });
+        }
+      }
+      // v1.3 爆裂體:死亡時引爆,癱瘓附近砲台
+      if (this.def.bombRadius) {
+        spawnParticles(this.x, this.y, this.def.color, 28);
+        spawnParticles(this.x, this.y, '#ffffff', 10);
+        AudioFX.explode();
+        for (const t of Game.towers) {
+          if (t.dead) continue;
+          if (dist(this, t) <= this.def.bombRadius) {
+            t.disabledTimer = Math.max(t.disabledTimer || 0, this.def.bombDisable);
+          }
+        }
+      }
+      updateUI();
+      AudioFX.death();
+      if (this.type === 'boss') log('★ 擊敗 BOSS! ★', 'e-good');
+    }
+  }
+  draw(ctx) {
+    const s = this.def.size;
+    const wobble = Math.sin(this.t*8)*1;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); ctx.ellipse(this.x, this.y+s*0.6, s*0.7, s*0.25, 0, 0, Math.PI*2); ctx.fill();
+
+    // 隱形透明度
+    const alpha = this.invisible ? 0.18 : 1;
+    ctx.globalAlpha = alpha;
+
+    // 狂戰士憤怒光環(HP越低越紅越大)
+    if (this.def.rageMult) {
+      const rage = 1 - clamp(this.hp/this.maxHp, 0, 1);
+      if (rage > 0.1) {
+        ctx.fillStyle = `rgba(255, 50, 0, ${rage*0.35})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, s*(1.5 + rage*0.8 + Math.sin(this.t*10)*0.1), 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // 治療光環脈衝
+    if (this.def.healAmt) {
+      const pulse = this.healPulse;
+      if (pulse > 0) {
+        ctx.strokeStyle = `rgba(51, 255, 153, ${pulse*0.8})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.def.healRadius * (1-pulse), 0, Math.PI*2);
+        ctx.stroke();
+      }
+      // 持續微光
+      ctx.fillStyle = 'rgba(51, 255, 153, 0.15)';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, s*1.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // v1.1 再生者治癒光暈
+    if (this.def.regenAmt && this.regenGlow > 0) {
+      ctx.fillStyle = `rgba(90,255,140,${this.regenGlow*0.25})`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, s*1.7, 0, Math.PI*2);
+      ctx.fill();
+    }
+    // v1.1 召喚者召喚脈衝
+    if (this.def.summonType && this.summonPulse > 0) {
+      ctx.strokeStyle = `rgba(63,224,176,${this.summonPulse*0.9})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, s*1.4*(1.5-this.summonPulse), 0, Math.PI*2);
+      ctx.stroke();
+    }
+    // v1.1 干擾者 EMP 脈衝
+    if (this.def.disruptInterval && this.disruptPulse > 0) {
+      ctx.strokeStyle = `rgba(179,92,255,${this.disruptPulse*0.8})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.def.disruptRadius*(1-this.disruptPulse), 0, Math.PI*2);
+      ctx.stroke();
+    }
+
+    // v1.3 衝鋒兵衝刺光環
+    if (this.charging) {
+      ctx.fillStyle = 'rgba(255,80,95,0.32)';
+      ctx.beginPath(); ctx.arc(this.x, this.y, s*1.5, 0, Math.PI*2); ctx.fill();
+    }
+    // v1.3 結界使減傷光環
+    if (this.def.aegisRadius) {
+      ctx.strokeStyle = `rgba(95,208,224,${0.22+Math.sin(this.t*3)*0.1})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.def.aegisRadius, 0, Math.PI*2); ctx.stroke();
+    }
+    // v1.3 受結界保護的敵人:外圈微光
+    if (this.shieldTimer > 0 && !this.def.aegisRadius) {
+      ctx.strokeStyle = 'rgba(150,232,255,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(this.x, this.y, s*1.35, 0, Math.PI*2); ctx.stroke();
+    }
+
+    // Body - pixel art per type
+    ctx.save();
+    ctx.translate(this.x, this.y + wobble);
+    drawEnemyPixel(ctx, this.type, s, this.t);
+    ctx.restore();
+
+    // 盾兵能量盾
+    if (this.def.shield) {
+      ctx.strokeStyle = `rgba(136, 153, 255, ${0.6 + Math.sin(this.t*6)*0.2})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, s*1.5, 0, Math.PI*2);
+      ctx.stroke();
+      // 六邊形紋理
+      ctx.strokeStyle = 'rgba(136, 153, 255, 0.4)';
+      ctx.lineWidth = 1;
+      for (let i=0;i<6;i++){
+        const a = i*Math.PI/3 + this.t*0.5;
+        ctx.beginPath();
+        ctx.arc(this.x + Math.cos(a)*s*1.5, this.y + Math.sin(a)*s*1.5, 4, 0, Math.PI*2);
+        ctx.stroke();
+      }
+    }
+
+    // 幻影殘影
+    if (this.def.phaseInterval && !this.invisible) {
+      ctx.globalAlpha = 0.25;
+      ctx.save();
+      ctx.translate(this.x - Math.cos(this.t*3)*4, this.y + wobble);
+      drawEnemyPixel(ctx, this.type, s, this.t);
+      ctx.restore();
+      ctx.globalAlpha = alpha;
+    }
+
+    ctx.globalAlpha = 1;
+
+    // Slow effect
+    if (this.slowAmt > 0) {
+      ctx.strokeStyle = '#66ddff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i=0;i<3;i++){
+        const a = this.t*4 + i*2.094;
+        ctx.moveTo(this.x + Math.cos(a)*s, this.y + Math.sin(a)*s);
+        ctx.lineTo(this.x + Math.cos(a+0.5)*s*1.4, this.y + Math.sin(a+0.5)*s*1.4);
+      }
+      ctx.stroke();
+    }
+
+    // HP bar (隱形時降低不透明度)
+    ctx.globalAlpha = this.invisible ? 0.3 : 1;
+    const hpW = s*2.2;
+    const hpH = 3;
+    const hpx = this.x - hpW/2, hpy = this.y - s - 8;
+    ctx.fillStyle = '#222'; ctx.fillRect(hpx-1, hpy-1, hpW+2, hpH+2);
+    ctx.fillStyle = '#000'; ctx.fillRect(hpx, hpy, hpW, hpH);
+    const ratio = clamp(this.hp/this.maxHp, 0, 1);
+    ctx.fillStyle = ratio>0.5?'#00ff66':(ratio>0.25?'#ffe600':'#ff4d6d');
+    ctx.fillRect(hpx, hpy, hpW*ratio, hpH);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawEnemyPixel(ctx, type, s, t) {
+  const c = ENEMY_DEFS[type].color;
+  if (t === undefined) t = 0;
+  switch(type){
+    case 'scout': {
+      // small diamond robot
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.6, -s*0.4, s*1.2, s*0.8);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.2, -s*0.2, s*0.4, s*0.2);
+      ctx.fillStyle = '#ff4040';
+      ctx.fillRect(-s*0.15, -s*0.15, s*0.3, s*0.1);
+      // legs
+      ctx.fillStyle = '#555';
+      ctx.fillRect(-s*0.6, s*0.4, s*0.3, s*0.3);
+      ctx.fillRect(s*0.3, s*0.4, s*0.3, s*0.3);
+      break;
+    }
+    case 'soldier': {
+      ctx.fillStyle = '#2a4a2a';
+      ctx.fillRect(-s*0.6, -s*0.7, s*1.2, s*0.4); // helmet
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.6, -s*0.3, s*1.2, s*0.9); // body
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.3, -s*0.55, s*0.2, s*0.15);
+      ctx.fillRect(s*0.1, -s*0.55, s*0.2, s*0.15);
+      ctx.fillStyle = '#222';
+      ctx.fillRect(-s*0.6, s*0.6, s*0.4, s*0.3);
+      ctx.fillRect(s*0.2, s*0.6, s*0.4, s*0.3);
+      break;
+    }
+    case 'tank': {
+      ctx.fillStyle = '#332218';
+      ctx.fillRect(-s*0.9, -s*0.5, s*1.8, s*1.0);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.7, -s*0.4, s*1.4, s*0.8);
+      ctx.fillStyle = '#222';
+      ctx.fillRect(-s*0.3, -s*0.25, s*0.6, s*0.5);
+      ctx.fillStyle = '#ff4040';
+      ctx.fillRect(-s*0.1, -s*0.15, s*0.2, s*0.2);
+      // treads
+      ctx.fillStyle = '#111';
+      ctx.fillRect(-s*0.9, s*0.5, s*1.8, s*0.25);
+      ctx.fillStyle = '#444';
+      for (let i=0;i<6;i++) ctx.fillRect(-s*0.85 + i*s*0.3, s*0.55, s*0.15, s*0.15);
+      break;
+    }
+    case 'drone': {
+      ctx.fillStyle = '#444';
+      ctx.fillRect(-s*0.4, -s*0.3, s*0.8, s*0.6);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.25, -s*0.15, s*0.5, s*0.3);
+      ctx.fillStyle = '#ff00ea';
+      ctx.fillRect(-s*0.05, -s*0.05, s*0.1, s*0.1);
+      // rotors
+      ctx.fillStyle = 'rgba(200,200,255,0.4)';
+      ctx.fillRect(-s*0.9, -s*0.4, s*0.4, s*0.05);
+      ctx.fillRect(s*0.5, -s*0.4, s*0.4, s*0.05);
+      ctx.fillRect(-s*0.9, s*0.3, s*0.4, s*0.05);
+      ctx.fillRect(s*0.5, s*0.3, s*0.4, s*0.05);
+      break;
+    }
+    case 'elite': {
+      ctx.fillStyle = '#220033';
+      ctx.fillRect(-s*0.8, -s*0.7, s*1.6, s*1.4);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.6, -s*0.5, s*1.2, s*1.0);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.3, -s*0.35, s*0.15, s*0.15);
+      ctx.fillRect(s*0.15, -s*0.35, s*0.15, s*0.15);
+      ctx.fillStyle = '#ffe600';
+      ctx.fillRect(-s*0.5, -s*0.85, s*0.15, s*0.2);
+      ctx.fillRect(-s*0.07, -s*0.95, s*0.15, s*0.25);
+      ctx.fillRect(s*0.35, -s*0.85, s*0.15, s*0.2);
+      break;
+    }
+    case 'miniboss': {
+      // 小型 BOSS:介於精英與大BOSS之間,橘紅色重裝
+      ctx.fillStyle = '#331a00';
+      ctx.fillRect(-s*0.95, -s*0.85, s*1.9, s*1.7);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.8, -s*0.7, s*1.6, s*1.4);
+      // 雙眼 + 紅光
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-s*0.55, -s*0.4, s*0.3, s*0.25);
+      ctx.fillRect(s*0.25, -s*0.4, s*0.3, s*0.25);
+      ctx.fillStyle = '#ff3300';
+      ctx.fillRect(-s*0.5, -s*0.35, s*0.2, s*0.15);
+      ctx.fillRect(s*0.3, -s*0.35, s*0.2, s*0.15);
+      // 嘴/排氣口
+      ctx.fillStyle = '#660033';
+      ctx.fillRect(-s*0.4, s*0.1, s*0.8, s*0.2);
+      ctx.fillStyle = '#ffaa00';
+      for (let i=0;i<3;i++) ctx.fillRect(-s*0.3 + i*s*0.25, s*0.12, s*0.12, s*0.16);
+      // 肩甲
+      ctx.fillStyle = '#552200';
+      ctx.fillRect(-s*1.0, -s*0.3, s*0.2, s*0.5);
+      ctx.fillRect(s*0.8, -s*0.3, s*0.2, s*0.5);
+      // 突刺
+      ctx.fillStyle = '#aa5500';
+      ctx.fillRect(-s*0.5, -s*0.95, s*0.15, s*0.2);
+      ctx.fillRect(-s*0.1, -s*1.0, s*0.15, s*0.25);
+      ctx.fillRect(s*0.35, -s*0.95, s*0.15, s*0.2);
+      // 履帶
+      ctx.fillStyle = '#222';
+      ctx.fillRect(-s*0.9, s*0.55, s*1.8, s*0.25);
+      ctx.fillStyle = '#555';
+      for (let i=0;i<7;i++) ctx.fillRect(-s*0.85+i*s*0.27, s*0.6, s*0.12, s*0.15);
+      break;
+    }
+    case 'boss': {
+      // big menacing
+      ctx.fillStyle = '#220011';
+      ctx.fillRect(-s*1.1, -s*0.9, s*2.2, s*1.8);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.9, -s*0.7, s*1.8, s*1.4);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-s*0.6, -s*0.4, s*0.4, s*0.3);
+      ctx.fillRect(s*0.2, -s*0.4, s*0.4, s*0.3);
+      ctx.fillStyle = '#ff0033';
+      ctx.fillRect(-s*0.55, -s*0.35, s*0.3, s*0.2);
+      ctx.fillRect(s*0.25, -s*0.35, s*0.3, s*0.2);
+      ctx.fillStyle = '#fff';
+      for (let i=0;i<5;i++) ctx.fillRect(-s*0.7 + i*s*0.3, s*0.3, s*0.18, s*0.3);
+      // spikes
+      ctx.fillStyle = '#660033';
+      ctx.fillRect(-s*1.0, -s*1.1, s*0.2, s*0.3);
+      ctx.fillRect(-s*0.1, -s*1.2, s*0.2, s*0.35);
+      ctx.fillRect(s*0.8, -s*1.1, s*0.2, s*0.3);
+      break;
+    }
+    case 'shield': {
+      // 盾兵:戴重甲,手持盾牌
+      ctx.fillStyle = '#334488';
+      ctx.fillRect(-s*0.65, -s*0.8, s*1.3, s*0.45); // 頭盔
+      ctx.fillStyle = '#222';
+      ctx.fillRect(-s*0.35, -s*0.55, s*0.7, s*0.1); // 護目鏡縫
+      ctx.fillStyle = '#aaccff';
+      ctx.fillRect(-s*0.25, -s*0.5, s*0.5, s*0.08);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.7, -s*0.35, s*1.4, s*1.0); // 身體
+      ctx.fillStyle = '#1a2a55';
+      ctx.fillRect(-s*0.3, -s*0.2, s*0.6, s*0.6);  // 胸甲
+      ctx.fillStyle = '#ffe600';
+      ctx.fillRect(-s*0.1, -s*0.05, s*0.2, s*0.2);
+      // 大盾
+      ctx.fillStyle = '#1a2a55';
+      ctx.fillRect(-s*1.1, -s*0.4, s*0.35, s*0.95);
+      ctx.fillStyle = '#5577cc';
+      ctx.fillRect(-s*1.05, -s*0.35, s*0.25, s*0.85);
+      ctx.fillStyle = '#aaccff';
+      ctx.fillRect(-s*0.97, -s*0.05, s*0.1, s*0.1);
+      // 腳
+      ctx.fillStyle = '#222';
+      ctx.fillRect(-s*0.5, s*0.65, s*0.35, s*0.25);
+      ctx.fillRect(s*0.15, s*0.65, s*0.35, s*0.25);
+      break;
+    }
+    case 'healer': {
+      // 治療單位:袍服 + 十字光環
+      ctx.fillStyle = '#225544';
+      ctx.fillRect(-s*0.6, -s*0.7, s*1.2, s*0.5); // 兜帽
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-s*0.3, -s*0.55, s*0.6, s*0.2);
+      ctx.fillStyle = '#aaffdd';
+      ctx.fillRect(-s*0.2, -s*0.45, s*0.4, s*0.08); // 眼縫
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.65, -s*0.25, s*1.3, s*0.95); // 袍
+      // 十字徽
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.08, -s*0.1, s*0.16, s*0.5);
+      ctx.fillRect(-s*0.25, s*0.05, s*0.5, s*0.16);
+      // 浮游晶體
+      const fl = Math.sin(t*4)*2;
+      ctx.fillStyle = '#88ffcc';
+      ctx.fillRect(-s*0.95, -s*0.6 + fl, s*0.2, s*0.2);
+      ctx.fillRect(s*0.75, -s*0.4 - fl, s*0.2, s*0.2);
+      break;
+    }
+    case 'berserker': {
+      // 狂戰士:雙刃肌肉戰士
+      ctx.fillStyle = '#552211';
+      ctx.fillRect(-s*0.55, -s*0.75, s*1.1, s*0.35); // 頭
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.5, -s*0.55, s*1.0, s*0.2);
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(-s*0.3, -s*0.45, s*0.2, s*0.1); // 紅眼
+      ctx.fillRect(s*0.1, -s*0.45, s*0.2, s*0.1);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.25, -s*0.2, s*0.5, s*0.1); // 牙
+      // 身體+肌肉
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.7, -s*0.1, s*1.4, s*0.8);
+      ctx.fillStyle = '#aa3300';
+      ctx.fillRect(-s*0.6, 0, s*0.3, s*0.5);
+      ctx.fillRect(s*0.3, 0, s*0.3, s*0.5);
+      // 雙刃
+      ctx.fillStyle = '#888';
+      ctx.fillRect(-s*1.1, -s*0.3, s*0.4, s*0.15);
+      ctx.fillRect(s*0.7, -s*0.3, s*0.4, s*0.15);
+      ctx.fillStyle = '#ddd';
+      ctx.fillRect(-s*1.1, -s*0.28, s*0.4, s*0.04);
+      ctx.fillRect(s*0.7, -s*0.28, s*0.4, s*0.04);
+      // 腳
+      ctx.fillStyle = '#332211';
+      ctx.fillRect(-s*0.55, s*0.7, s*0.3, s*0.25);
+      ctx.fillRect(s*0.25, s*0.7, s*0.3, s*0.25);
+      break;
+    }
+    case 'phantom': {
+      // 幻影:漂浮幽靈型
+      const float = Math.sin(t*3)*1.5;
+      ctx.save();
+      ctx.translate(0, float);
+      ctx.fillStyle = '#330044';
+      ctx.fillRect(-s*0.6, -s*0.75, s*1.2, s*1.0);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.55, -s*0.7, s*1.1, s*1.0);
+      // 眼
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-s*0.35, -s*0.4, s*0.2, s*0.2);
+      ctx.fillRect(s*0.15, -s*0.4, s*0.2, s*0.2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-s*0.3, -s*0.35, s*0.1, s*0.1);
+      ctx.fillRect(s*0.2, -s*0.35, s*0.1, s*0.1);
+      // 飄逸下擺
+      ctx.fillStyle = c;
+      for (let i=0;i<4;i++){
+        const wave = Math.sin(t*4 + i)*2;
+        ctx.fillRect(-s*0.55 + i*s*0.3, s*0.3 + wave, s*0.2, s*0.4);
+      }
+      ctx.restore();
+      break;
+    }
+    case 'splitter': {
+      // 分裂體:中央有發光裂縫的雙瓣體
+      ctx.fillStyle = '#5a6010';
+      ctx.fillRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.75, -s*0.5, s*0.65, s*1.0);
+      ctx.fillRect(s*0.1, -s*0.5, s*0.65, s*1.0);
+      const gap = 1.2 + Math.sin(t*5)*1.2;
+      ctx.fillStyle = '#ffffcc';
+      ctx.fillRect(-gap, -s*0.5, gap*2, s*1.0);
+      ctx.fillStyle = '#222';
+      ctx.fillRect(-s*0.55, -s*0.25, s*0.22, s*0.22);
+      ctx.fillRect(s*0.33, -s*0.25, s*0.22, s*0.22);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.5, -s*0.2, s*0.09, s*0.09);
+      ctx.fillRect(s*0.38, -s*0.2, s*0.09, s*0.09);
+      break;
+    }
+    case 'splitling': {
+      // 分裂子體:迷你雙瓣體
+      ctx.fillStyle = '#5a6010';
+      ctx.fillRect(-s*0.7, -s*0.6, s*1.4, s*1.2);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.55, -s*0.45, s*1.1, s*0.9);
+      ctx.fillStyle = '#222';
+      ctx.fillRect(-s*0.3, -s*0.15, s*0.2, s*0.2);
+      ctx.fillRect(s*0.1, -s*0.15, s*0.2, s*0.2);
+      break;
+    }
+    case 'summoner': {
+      // 召喚者:長袍 + 浮空召喚球 + 旋轉法陣
+      ctx.save();
+      ctx.rotate(t*2);
+      ctx.strokeStyle = 'rgba(136,255,221,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-s*0.55, -s*0.55, s*1.1, s*1.1);
+      ctx.restore();
+      ctx.fillStyle = '#0d3d33';
+      ctx.fillRect(-s*0.6, -s*0.75, s*1.2, s*0.5);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.7, -s*0.3, s*1.4, s*1.0);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-s*0.3, -s*0.6, s*0.6, s*0.22);
+      ctx.fillStyle = '#aaffee';
+      ctx.fillRect(-s*0.2, -s*0.55, s*0.4, s*0.09);
+      const orbY = -s*1.05 + Math.sin(t*3)*2.5;
+      ctx.fillStyle = '#88ffdd';
+      ctx.fillRect(-s*0.2, orbY, s*0.4, s*0.4);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.08, orbY+s*0.1, s*0.16, s*0.16);
+      break;
+    }
+    case 'regen': {
+      // 再生者:生化外殼 + 脈動再生核心 + 觸手腳
+      ctx.fillStyle = '#0c3a1c';
+      ctx.fillRect(-s*0.8, -s*0.7, s*1.6, s*1.4);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.65, -s*0.55, s*1.3, s*1.1);
+      const rp = 0.5 + Math.sin(t*4)*0.5;
+      ctx.fillStyle = `rgba(170,255,190,${0.45+rp*0.55})`;
+      ctx.fillRect(-s*0.27, -s*0.27, s*0.54, s*0.54);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.1, -s*0.1, s*0.2, s*0.2);
+      ctx.fillStyle = '#012';
+      ctx.fillRect(-s*0.52, -s*0.42, s*0.2, s*0.16);
+      ctx.fillRect(s*0.32, -s*0.42, s*0.2, s*0.16);
+      ctx.fillStyle = '#0c3a1c';
+      for (let i=0;i<3;i++){
+        const w = Math.sin(t*5+i)*2;
+        ctx.fillRect(-s*0.6 + i*s*0.45, s*0.5 + w, s*0.22, s*0.38);
+      }
+      break;
+    }
+    case 'disruptor': {
+      // 干擾者:電磁干擾器 + 擺動天線 + 電弧
+      ctx.fillStyle = '#2a0d4d';
+      ctx.fillRect(-s*0.7, -s*0.4, s*1.4, s*1.0);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.55, -s*0.3, s*1.1, s*0.85);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.12, -s*0.12, s*0.24, s*0.24);
+      ctx.fillStyle = '#1a0033';
+      ctx.fillRect(-s*0.42, -s*0.12, s*0.16, s*0.16);
+      ctx.fillRect(s*0.26, -s*0.12, s*0.16, s*0.16);
+      ctx.save();
+      ctx.translate(0, -s*0.5);
+      ctx.rotate(Math.sin(t*3)*0.5);
+      ctx.fillStyle = '#d8b0ff';
+      ctx.fillRect(-s*0.5, -s*0.1, s*1.0, s*0.1);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.06, -s*0.5, s*0.12, s*0.5);
+      ctx.restore();
+      ctx.strokeStyle = `rgba(216,176,255,${0.4+Math.abs(Math.sin(t*12))*0.6})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-s*0.5,-s*0.45); ctx.lineTo(-s*0.2,-s*0.15);
+      ctx.lineTo(-s*0.35,s*0.05); ctx.stroke();
+      ctx.fillStyle = '#2a0d4d';
+      ctx.fillRect(-s*0.45, s*0.5, s*0.3, s*0.25);
+      ctx.fillRect(s*0.15, s*0.5, s*0.3, s*0.25);
+      break;
+    }
+    case 'charger': {
+      // 衝鋒兵:前傾衝刺體 + 推進尾焰
+      ctx.fillStyle = 'rgba(255,160,80,0.85)';
+      const fl = Math.sin(t*20)*0.5+0.5;
+      ctx.fillRect(-s*0.7 - s*0.55*fl, -s*0.22, s*0.55*fl, s*0.44);
+      ctx.fillStyle = '#5a1418';
+      ctx.fillRect(-s*0.7, -s*0.5, s*1.45, s*1.0);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.6, -s*0.4, s*1.3, s*0.8);
+      ctx.fillStyle = '#ffd0d0';
+      ctx.beginPath();
+      ctx.moveTo(s*0.7, -s*0.32); ctx.lineTo(s*1.15, 0); ctx.lineTo(s*0.7, s*0.32);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(s*0.05, -s*0.22, s*0.28, s*0.2);
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(s*0.14, -s*0.17, s*0.13, s*0.11);
+      ctx.fillStyle = '#3a0a0e';
+      ctx.fillRect(-s*0.4, s*0.4, s*0.3, s*0.3);
+      ctx.fillRect(s*0.2, s*0.4, s*0.3, s*0.3);
+      break;
+    }
+    case 'aegis': {
+      // 結界使:護盾發生器 + 環繞節點
+      ctx.fillStyle = '#0d3d44';
+      ctx.fillRect(-s*0.6, -s*0.6, s*1.2, s*1.2);
+      ctx.fillStyle = c;
+      ctx.fillRect(-s*0.5, -s*0.5, s*1.0, s*1.0);
+      const pl = 0.5 + Math.sin(t*3)*0.5;
+      ctx.fillStyle = `rgba(200,255,255,${0.5+pl*0.5})`;
+      ctx.beginPath(); ctx.arc(0, -s*0.05, s*0.32, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(0, -s*0.05, s*0.14, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#012';
+      ctx.fillRect(-s*0.42, -s*0.36, s*0.16, s*0.12);
+      ctx.fillRect(s*0.26, -s*0.36, s*0.16, s*0.12);
+      for (let i=0;i<4;i++){
+        const a = t*1.5 + i*Math.PI/2;
+        ctx.fillStyle = '#aef0ff';
+        ctx.fillRect(Math.cos(a)*s*0.78 - 2, Math.sin(a)*s*0.78 - 2, 4, 4);
+      }
+      ctx.fillStyle = '#0d3d44';
+      ctx.fillRect(-s*0.4, s*0.45, s*0.28, s*0.25);
+      ctx.fillRect(s*0.12, s*0.45, s*0.28, s*0.25);
+      break;
+    }
+    case 'bomber': {
+      // 爆裂體:不穩定炸彈體 + 引信
+      const sp = Math.sin(t*22)*0.5+0.5;
+      ctx.strokeStyle = '#888'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0,-s*0.55); ctx.lineTo(s*0.22,-s*0.95); ctx.stroke();
+      ctx.fillStyle = `rgba(255,${(180+sp*60)|0},70,1)`;
+      ctx.fillRect(s*0.22-3, -s*1.02, 6, 6);
+      ctx.fillStyle = `rgba(255,90,0,${sp*0.5})`;
+      ctx.beginPath(); ctx.arc(0,0,s*0.95,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#5a2e08';
+      ctx.beginPath(); ctx.arc(0,0,s*0.82,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = c;
+      ctx.beginPath(); ctx.arc(0,0,s*0.68,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#3a1a00';
+      ctx.fillRect(-s*0.68, -s*0.13, s*1.36, s*0.1);
+      ctx.fillRect(-s*0.68, s*0.1, s*1.36, s*0.1);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-s*0.32, -s*0.4, s*0.2, s*0.18);
+      ctx.fillRect(s*0.12, -s*0.4, s*0.2, s*0.18);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-s*0.26, -s*0.36, s*0.1, s*0.1);
+      ctx.fillRect(s*0.18, -s*0.36, s*0.1, s*0.1);
+      break;
+    }
+  }
+}
+
+// ---------------- Tower ----------------
+class Tower {
+  constructor(type, x, y, fireAngle = 0) {
+    this.type = type;
+    this.def = TOWER_DEFS[type];
+    this.x = x; this.y = y;
+    this.level = 0; // 0=base, 1, 2
+    this.cd = 0;
+    // v8: 軌道砲使用固定發射方向,其它塔仍會旋轉瞄準
+    this.fireAngle = fireAngle;
+    this.angle = (type === 'rail') ? fireAngle : 0;
+    this.targetAngle = (type === 'rail') ? fireAngle : 0;
+    this.isMech = !!this.def.isMech;
+    this.hp = this.def.hp || 0;
+    this.maxHp = this.hp;
+    this.dead = false;
+    this.totalCost = this.def.cost;
+    this.targetEnemy = null;
+    this.shotFlash = 0;
+    this.upgradeFlash = 0;
+    // v1.1:被干擾者癱瘓的剩餘時間 / 指揮塔增益倍率
+    this.disabledTimer = 0;
+    this.dmgMult = 1;
+    this.fireRateMult = 1;
+    // v1.2:被「系統故障」debuff 整波癱瘓
+    this.faulted = false;
+  }
+  get stats() {
+    const base = this.def;
+    if (this.level === 0) return base;
+    return Object.assign({}, base, base.upgrades[this.level-1]);
+  }
+  canUpgrade() { return this.level < 2; }
+  upgradeCost() { return this.def.upgrades[this.level]?.cost || 0; }
+  upgrade() {
+    if (!this.canUpgrade()) return false;
+    const cost = this.upgradeCost();
+    if (Game.gold < cost) return false;
+    Game.gold -= cost;
+    this.level++;
+    this.totalCost += cost;
+    if (this.isMech) {
+      this.maxHp = this.stats.hp;
+      this.hp = this.maxHp; // heal on upgrade
+    }
+    AudioFX.upgrade();
+    this.upgradeFlash = 1.2; // 塔身發光
+    Game.upgradeEffects.push(new UpgradeEffect(this.x, this.y, this.def.color, this.level));
+    log(`★ ${this.def.name} 升級至 Lv.${this.level+1} ★`, 'e-good');
+    return true;
+  }
+  sell() {
+    const ret = Math.floor(this.totalCost * 0.6);
+    Game.gold += ret;
+    AudioFX.sell();
+    log(`回收 ${this.def.name} (+${ret}⚡)`, 'e-warn');
+    this.dead = true;
+    updateUI();
+  }
+  update(dt) {
+    if (this.dead) return;
+    this.cd -= dt;
+    this.shotFlash = Math.max(0, this.shotFlash - dt*8);
+    this.upgradeFlash = Math.max(0, this.upgradeFlash - dt*1.0);
+    if (this.disabledTimer > 0) this.disabledTimer -= dt;
+    const s = this.stats;
+    // v1.1 指揮塔:不攻擊,只提供增益(由 applySupportBuffs 統一處理)
+    if (this.def.isSupport) return;
+    const disabled = this.disabledTimer > 0 || this.faulted;
+
+    let best = null;
+    if (this.type === 'rail') {
+      // v8:軌道砲 — 方向固定,只偵測「直線上」的敵人
+      // v12:在直線上的敵人中挑「血量最低」的作為目標
+      const dx = Math.cos(this.fireAngle), dy = Math.sin(this.fireAngle);
+      const LINE_HALF = 20; // 直線寬度(垂直容忍距離)
+      let bestHp = Infinity;
+      for (const e of Game.enemies) {
+        if (!e.isTargetable()) continue;
+        const rx = e.x - this.x, ry = e.y - this.y;
+        const along = rx*dx + ry*dy;           // 沿發射方向的投影距離
+        if (along < 0 || along > s.range * Game.fx.towerRange) continue; // 後方或超出射程
+        const perp = Math.abs(rx*dy - ry*dx);  // 垂直於直線的距離
+        if (perp > LINE_HALF) continue;
+        if (e.hp < bestHp) { bestHp = e.hp; best = e; }
+      }
+      this.targetEnemy = best;
+      this.angle = this.fireAngle; // 不旋轉
+      if (best && this.cd <= 0 && !disabled) {
+        this.cd = 1/(s.fireRate * this.fireRateMult * Game.fx.towerRate);
+        this.shoot(best);
+      }
+      return;
+    }
+
+    // v12:攻擊目標 = 射程內血量最低的敵人(優先收掉殘血)
+    let bestHp = Infinity;
+    for (const e of Game.enemies) {
+      if (!e.isTargetable()) continue;
+      if (dist(this, e) <= s.range * Game.fx.towerRange) {
+        if (e.hp < bestHp) { bestHp = e.hp; best = e; }
+      }
+    }
+    this.targetEnemy = best;
+    if (best) {
+      this.targetAngle = Math.atan2(best.y-this.y, best.x-this.x);
+      // smooth rotation
+      let diff = this.targetAngle - this.angle;
+      while (diff > Math.PI) diff -= Math.PI*2;
+      while (diff < -Math.PI) diff += Math.PI*2;
+      this.angle += diff * Math.min(1, dt*10);
+
+      if (this.cd <= 0 && !disabled) {
+        this.cd = 1/(s.fireRate * this.fireRateMult * Game.fx.towerRate);
+        this.shoot(best);
+      }
+    }
+  }
+  shoot(enemy) {
+    const s = this.stats;
+    // v1.1 鏈電塔:即時連鎖閃電,不發射實體彈
+    if (this.type === 'tesla') { this.teslaStrike(enemy); return; }
+    let vx, vy;
+    if (this.type === 'rail') {
+      // v8:軌道砲沿固定部署方向發射(不朝目標)
+      vx = Math.cos(this.fireAngle);
+      vy = Math.sin(this.fireAngle);
+    } else {
+      const dx = enemy.x - this.x, dy = enemy.y - this.y;
+      const d = Math.hypot(dx,dy);
+      vx = dx/d; vy = dy/d;
+    }
+    this.shotFlash = 1;
+    // v7:軌道砲彈道更快;v1.3:狙擊塔彈道也很快
+    const projSpeed = (this.type === 'rail') ? 1200 : (this.type === 'sniper' ? 1100 : 500);
+    Game.projectiles.push(new Projectile({
+      x: this.x, y: this.y, vx: vx*projSpeed, vy: vy*projSpeed,
+      kind: this.def.proj, dmg: s.dmg * this.dmgMult * Game.fx.towerDmg, target: enemy,
+      splash: s.splash || 0, slow: s.slow || 0, slowDur: s.slowDur || 0,
+      pierce: s.pierce || 0, color: this.def.color,
+      poison: s.poison || 0, poisonDur: s.poisonDur || 0
+    }));
+    // sound
+    if (this.type==='laser') AudioFX.laser();
+    else if (this.type==='plasma') AudioFX.plasma();
+    else if (this.type==='cryo') AudioFX.cryo();
+    else if (this.type==='rail') AudioFX.rail();
+    else if (this.type==='sniper') AudioFX.sniper();
+    else if (this.type==='poison') AudioFX.poison();
+    else AudioFX.laser();
+  }
+  // v1.1 鏈電塔:閃電從目標連鎖跳躍到附近敵人,傷害逐跳衰減
+  teslaStrike(firstTarget) {
+    const s = this.stats;
+    const CHAIN_RANGE = 86;     // 跳躍最大距離
+    const FALLOFF = 0.70;       // 每跳傷害衰減
+    const maxJumps = s.chainCount || 3;
+    const hit = new Set();
+    const points = [{x:this.x, y:this.y}];
+    let cur = firstTarget;
+    let dmg = s.dmg * this.dmgMult * Game.fx.towerDmg;
+    let jumps = 0;
+    while (cur && jumps <= maxJumps) {
+      cur.takeDamage(dmg, 0, 0);
+      hit.add(cur);
+      points.push({x:cur.x, y:cur.y});
+      spawnParticles(cur.x, cur.y, this.def.color, 5);
+      let next = null, nd = CHAIN_RANGE;
+      for (const e of Game.enemies) {
+        if (!e.isTargetable() || hit.has(e)) continue;
+        const d = dist(cur, e);
+        if (d < nd) { nd = d; next = e; }
+      }
+      cur = next;
+      dmg *= FALLOFF;
+      jumps++;
+    }
+    this.shotFlash = 1;
+    Game.lightnings.push(new Lightning(points, this.def.color));
+    AudioFX.tesla();
+  }
+  draw(ctx) {
+    // v1.1 指揮塔:常駐增益光環
+    if (this.def.isSupport && !this.dead) {
+      const sr = this.stats.range * Game.fx.towerRange;
+      ctx.strokeStyle = this.def.color;
+      ctx.globalAlpha = 0.10 + Math.sin(Game.time*2)*0.05;
+      ctx.beginPath(); ctx.arc(this.x, this.y, sr, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    drawTowerPixel(ctx, this);
+    // hp bar for mech
+    if (this.isMech) {
+      const hpW = 26, hpH = 3;
+      const ratio = clamp(this.hp/this.maxHp,0,1);
+      ctx.fillStyle = '#222'; ctx.fillRect(this.x-hpW/2-1, this.y-22, hpW+2, hpH+2);
+      ctx.fillStyle = '#000'; ctx.fillRect(this.x-hpW/2, this.y-21, hpW, hpH);
+      ctx.fillStyle = ratio>0.5?'#00ff66':'#ff4d6d';
+      ctx.fillRect(this.x-hpW/2, this.y-21, hpW*ratio, hpH);
+    }
+    // level pips
+    for (let i=0;i<this.level;i++){
+      ctx.fillStyle = '#ffe600';
+      ctx.fillRect(this.x-9+i*8, this.y+14, 4, 4);
+    }
+    // v1.1/v1.2 癱瘓指示(干擾者 ✕ / 系統故障 ⚠)
+    if (this.disabledTimer > 0 || this.faulted) {
+      ctx.globalAlpha = 0.55 + Math.sin(Game.time*28)*0.35;
+      ctx.fillStyle = this.faulted ? '#ff9933' : '#b35cff';
+      ctx.font = 'bold 13px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(this.faulted ? '⚠' : '✕', this.x, this.y-20);
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+function drawTowerPixel(ctx, t) {
+  ctx.save();
+  ctx.translate(t.x, t.y);
+
+  // 升級光暈(剛升級時整座塔泛光)
+  if (t.upgradeFlash > 0) {
+    const uf = t.upgradeFlash;
+    const ufClamp = Math.min(1, uf);
+    // 外層光暈
+    ctx.fillStyle = t.def.color;
+    ctx.globalAlpha = ufClamp * 0.35;
+    ctx.fillRect(-22, -22, 44, 44);
+    // 白色內核閃光
+    ctx.fillStyle = '#fff';
+    ctx.globalAlpha = ufClamp * 0.5;
+    ctx.fillRect(-14, -14, 28, 28);
+    ctx.globalAlpha = 1;
+  }
+
+  if (t.type === 'mech') {
+    // friendly mech
+    ctx.save();
+    ctx.rotate(t.angle);
+    ctx.fillStyle = '#664400';
+    ctx.fillRect(-12, -10, 24, 20);
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(-10, -8, 20, 16);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-2, -2, 4, 4);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(8, -3, 8, 6); // gun
+    if (t.shotFlash > 0) {
+      ctx.fillStyle = '#ffeeaa';
+      ctx.fillRect(15, -3, 4, 6);
+    }
+    ctx.restore();
+    // legs
+    ctx.fillStyle = '#553300';
+    ctx.fillRect(-12, 8, 6, 8);
+    ctx.fillRect(6, 8, 6, 8);
+    ctx.restore();
+    return;
+  }
+
+  // base
+  ctx.fillStyle = '#1a2347';
+  ctx.fillRect(-16, -16, 32, 32);
+  ctx.fillStyle = '#2a3870';
+  ctx.fillRect(-14, -14, 28, 28);
+  // corner studs
+  ctx.fillStyle = '#0e1432';
+  for (const [dx,dy] of [[-12,-12],[10,-12],[-12,10],[10,10]]) ctx.fillRect(dx, dy, 4, 4);
+
+  // type-specific turret rotated
+  ctx.save();
+  ctx.rotate(t.angle);
+
+  if (t.type === 'laser') {
+    ctx.fillStyle = '#003344';
+    ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(-2, -5, 18, 10);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(12, -2, 4, 4);
+    if (t.shotFlash > 0) {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(16, -3, 5, 6);
+    }
+  } else if (t.type === 'plasma') {
+    ctx.fillStyle = '#33002a';
+    ctx.fillRect(-10,-10,20,20);
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(-8,-8,16,16);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(6, -5, 10, 10);
+    ctx.fillStyle = t.shotFlash > 0 ? '#ffccff' : '#660055';
+    ctx.fillRect(12, -4, 6, 8);
+  } else if (t.type === 'cryo') {
+    ctx.fillStyle = '#003355';
+    ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(-3, -3, 6, 6);
+    // three prongs
+    for (let i=0;i<3;i++){
+      ctx.save();
+      ctx.rotate(i*2.094);
+      ctx.fillRect(2, -2, 12, 4);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(12,-1,2,2);
+      ctx.fillStyle = t.def.color;
+      ctx.restore();
+    }
+  } else if (t.type === 'rail') {
+    ctx.fillStyle = '#333300';
+    ctx.fillRect(-10, -8, 20, 16);
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(-2, -3, 24, 6);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(20, -2, 4, 4);
+    if (t.shotFlash > 0) {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(24, -2, 8, 4);
+    }
+  } else if (t.type === 'tesla') {
+    // 鏈電塔:特斯拉線圈
+    ctx.fillStyle = '#0a2438';
+    ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = t.def.color;
+    ctx.lineWidth = 2;
+    for (let i=0;i<3;i++){ ctx.beginPath(); ctx.arc(0,0,4+i*3,0,Math.PI*2); ctx.stroke(); }
+    ctx.fillStyle = t.shotFlash>0 ? '#ffffff' : t.def.color;
+    ctx.beginPath(); ctx.arc(0,0,3.5,0,Math.PI*2); ctx.fill();
+    if (t.shotFlash>0){
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      for (let i=0;i<4;i++){
+        const a = i*1.57 + Game.time*8;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*4, Math.sin(a)*4);
+        ctx.lineTo(Math.cos(a)*13, Math.sin(a)*13);
+        ctx.stroke();
+      }
+    }
+  } else if (t.type === 'command') {
+    // 指揮塔:指揮中樞 + 旋轉雷達臂
+    ctx.fillStyle = '#3a2a08';
+    ctx.fillRect(-10,-10,20,20);
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(-8,-8,16,16);
+    ctx.fillStyle = '#1a1200';
+    ctx.fillRect(-5,-5,10,10);
+    ctx.save();
+    ctx.rotate(Game.time*1.6);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0,-1.5,12,3);
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(10,-3,4,6);
+    ctx.restore();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-2,-2,4,4);
+  } else if (t.type === 'sniper') {
+    // 狙擊塔:長砲管 + 瞄準鏡
+    ctx.fillStyle = '#3a1a2a';
+    ctx.fillRect(-9, -7, 14, 14);
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(-7, -5, 10, 10);
+    // 長砲管
+    ctx.fillStyle = '#2a2a33';
+    ctx.fillRect(2, -3, 26, 6);
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(24, -2, 6, 4);
+    // 瞄準鏡
+    ctx.fillStyle = '#88ccff';
+    ctx.fillRect(-2, -8, 6, 4);
+    if (t.shotFlash > 0) {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(30, -3, 9, 6);
+    }
+  } else if (t.type === 'poison') {
+    // 毒素塔:毒液槽 + 噴嘴
+    ctx.fillStyle = '#1a3a0a';
+    ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
+    // 冒泡毒液槽
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(-7, -7, 14, 14);
+    ctx.fillStyle = '#1a3a0a';
+    const bub = Math.sin(Game.time*6)*2;
+    ctx.fillRect(-4, -3+bub, 3, 3);
+    ctx.fillRect(2, 0-bub, 3, 3);
+    // 噴嘴
+    ctx.fillStyle = '#2a4a1a';
+    ctx.fillRect(5, -3, 14, 6);
+    ctx.fillStyle = t.shotFlash > 0 ? '#eaffaa' : '#3a5a2a';
+    ctx.fillRect(15, -2, 5, 4);
+  }
+  ctx.restore();
+
+  // center light
+  ctx.fillStyle = t.def.color;
+  ctx.fillRect(-1.5, -1.5, 3, 3);
+  ctx.restore();
+}
+
+// ---------------- Projectile ----------------
+class Projectile {
+  constructor(o) {
+    Object.assign(this, o);
+    // v7:軌道砲彈道延長至能穿越全地圖
+    this.life = (this.kind === 'rail') ? 3.0 : 1.5;
+    this.dead = false;
+    this.hitSet = new Set();
+    this.trail = [];
+    // v1.3:記錄發射點,用於「離開發射處後才判定阻擋」
+    this.ox = this.x; this.oy = this.y;
+  }
+  update(dt) {
+    this.life -= dt;
+    if (this.life <= 0) { this.dead = true; return; }
+    // store trail
+    this.trail.push({x:this.x, y:this.y});
+    if (this.trail.length>8) this.trail.shift();
+    this.x += this.vx*dt; this.y += this.vy*dt;
+
+    if (this.x<-40||this.x>W+40||this.y<-40||this.y>H+40) { this.dead = true; return; }
+
+    // v1.3:子彈被地圖障礙物 / 友軍機甲擋下(離開發射點 22px 後才判定)
+    if ((this.x-this.ox)*(this.x-this.ox) + (this.y-this.oy)*(this.y-this.oy) > 484) {
+      const oc = Math.floor(this.x/TILE), or = Math.floor(this.y/TILE);
+      if (obstacleTiles.has(oc + ',' + or)) {
+        spawnParticles(this.x, this.y, '#8899aa', 5);
+        this.dead = true; return;
+      }
+      for (const t of Game.towers) {
+        if (t.isMech && !t.dead && dist(this, t) < 16) {
+          spawnParticles(this.x, this.y, '#ffaa00', 4);
+          this.dead = true; return;
+        }
+      }
+    }
+
+    // collision
+    for (const e of Game.enemies) {
+      if (!e.isTargetable()) continue;
+      if (this.hitSet.has(e)) continue;
+      if (dist(this, e) < e.def.size + 4) {
+        e.takeDamage(this.dmg, this.slow, this.slowDur);
+        this.hitSet.add(e);
+        AudioFX.hit();
+
+        if (this.kind === 'plasma') {
+          // splash
+          for (const e2 of Game.enemies) {
+            if (e2 === e || e2.dead || e2.reachedEnd) continue;
+            if (dist(this, e2) <= this.splash) {
+              const falloff = 1 - dist(this,e2)/this.splash * 0.5;
+              e2.takeDamage(this.dmg * falloff, 0, 0);
+            }
+          }
+          spawnParticles(this.x, this.y, this.color, 22);
+          AudioFX.explode();
+          this.dead = true;
+          return;
+        }
+        if (this.kind === 'cryo') {
+          // v7: 冰凍 AOE - 範圍內所有敵人都受傷害並減速
+          for (const e2 of Game.enemies) {
+            if (e2 === e || !e2.isTargetable()) continue;
+            if (dist(this, e2) <= this.splash) {
+              const falloff = 1 - dist(this, e2) / this.splash * 0.4;
+              e2.takeDamage(this.dmg * falloff, this.slow, this.slowDur);
+            }
+          }
+          spawnParticles(this.x, this.y, this.color, 14);
+          // 範圍可視化:擴散環效果
+          spawnParticles(this.x, this.y, '#aaeeff', 8);
+          this.dead = true;
+          return;
+        }
+        if (this.kind === 'rail') {
+          // pierce
+          spawnParticles(this.x, this.y, this.color, 6);
+          if (this.hitSet.size >= this.pierce) { this.dead = true; return; }
+          continue;
+        }
+        if (this.kind === 'poison') {
+          // v1.3 毒素塔:命中疊加可累積的 DoT(上限為單發毒值 ×4)
+          const cap = this.poison * 4;
+          e.poisonDps = Math.min(e.poisonDps + this.poison, cap);
+          e.poisonTimer = this.poisonDur;
+          spawnParticles(this.x, this.y, this.color, 7);
+          this.dead = true;
+          return;
+        }
+        // laser/sniper/default
+        spawnParticles(this.x, this.y, this.color, 5);
+        this.dead = true;
+        return;
+      }
+    }
+  }
+  draw(ctx) {
+    // trail
+    for (let i=0;i<this.trail.length;i++){
+      const p = this.trail[i];
+      const a = (i+1)/this.trail.length;
+      ctx.fillStyle = this.color;
+      ctx.globalAlpha = a*0.6;
+      const sz = 2 + a*2;
+      ctx.fillRect(p.x-sz/2, p.y-sz/2, sz, sz);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff';
+    if (this.kind==='rail') {
+      ctx.fillStyle = this.color;
+      ctx.fillRect(this.x-3, this.y-3, 6, 6);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(this.x-1, this.y-1, 2, 2);
+    } else if (this.kind === 'plasma') {
+      ctx.fillStyle = this.color;
+      ctx.beginPath(); ctx.arc(this.x,this.y,4,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(this.x,this.y,2,0,Math.PI*2); ctx.fill();
+    } else if (this.kind === 'cryo') {
+      ctx.fillStyle = this.color;
+      ctx.fillRect(this.x-2, this.y-2, 4, 4);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(this.x-1, this.y-1, 2, 2);
+    } else {
+      ctx.fillStyle = this.color;
+      ctx.fillRect(this.x-2, this.y-2, 4, 4);
+    }
+  }
+}
+
+// ---------------- Upgrade Effect ----------------
+class UpgradeEffect {
+  constructor(x, y, color, level) {
+    this.x = x; this.y = y;
+    this.color = color;
+    this.level = level;
+    this.t = 0;
+    this.dur = 1.5;
+    this.dead = false;
+    this.sparkles = [];
+    this.shards = [];
+    // 散射粒子(四面爆出)
+    for (let i=0;i<60;i++){
+      const a = Math.random()*Math.PI*2;
+      const sp = Math.random()*220 + 80;
+      this.sparkles.push({
+        x: x, y: y,
+        vx: Math.cos(a)*sp,
+        vy: Math.sin(a)*sp - 60,
+        life: 0.8 + Math.random()*0.6,
+        size: 2 + Math.random()*3,
+        gravity: 60,
+        white: Math.random() < 0.35
+      });
+    }
+    // 上升金色光點
+    for (let i=0;i<30;i++){
+      this.sparkles.push({
+        x: x + (Math.random()*40-20),
+        y: y + (Math.random()*40-20),
+        vx: (Math.random()*30-15),
+        vy: -90 - Math.random()*100,
+        life: 1.2 + Math.random()*0.4,
+        size: 1.5 + Math.random()*2.2,
+        gravity: -20,
+        white: Math.random() < 0.4
+      });
+    }
+    // 旋轉光刃(向外射出4道)
+    for (let i=0;i<4;i++){
+      const a = i * Math.PI/2 + Math.random()*0.3;
+      this.shards.push({
+        a, len: 0, maxLen: 70+Math.random()*40, t: 0
+      });
+    }
+  }
+  update(dt) {
+    this.t += dt;
+    if (this.t >= this.dur) this.dead = true;
+    for (const s of this.sparkles) {
+      if (s.life <= 0) continue;
+      s.life -= dt;
+      s.x += s.vx*dt;
+      s.y += s.vy*dt;
+      s.vy += s.gravity*dt;
+      s.vx *= 0.96;
+    }
+    for (const sh of this.shards) {
+      sh.t += dt;
+      sh.len = Math.min(sh.maxLen, sh.t * 240);
+    }
+  }
+  draw(ctx) {
+    const p = this.t / this.dur; // 0..1
+
+    // 1. 光柱(從上往下射入)
+    if (p < 0.55) {
+      const pp = p / 0.55;
+      const beamAlpha = Math.sin(pp * Math.PI) * 0.7;
+      const beamW = 36 - pp*12;
+      ctx.globalAlpha = beamAlpha;
+      const grad = ctx.createLinearGradient(this.x, this.y - 260, this.x, this.y + 30);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.4, this.color);
+      grad.addColorStop(0.95, '#ffffff');
+      grad.addColorStop(1, '#ffffff');
+      ctx.fillStyle = grad;
+      ctx.fillRect(this.x - beamW/2, this.y - 260, beamW, 290);
+      // 內芯
+      ctx.globalAlpha = beamAlpha * 0.9;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(this.x - 3, this.y - 260, 6, 290);
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. 起始爆閃
+    if (p < 0.18) {
+      const fa = 1 - p/0.18;
+      ctx.globalAlpha = fa * 0.9;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 40 * (1 + p*4), 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = this.color;
+      ctx.globalAlpha = fa * 0.6;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 60 * (1 + p*5), 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. 三重擴散光環
+    for (let i=0;i<3;i++){
+      const ringP = (p - i*0.13);
+      if (ringP > 0 && ringP < 0.75) {
+        const rp = ringP / 0.75;
+        const r = rp * 90;
+        const a = (1 - rp) * 0.9;
+        ctx.strokeStyle = this.color;
+        ctx.globalAlpha = a;
+        ctx.lineWidth = 4 - rp*3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, r, 0, Math.PI*2);
+        ctx.stroke();
+        // 內圈白色
+        ctx.strokeStyle = '#fff';
+        ctx.globalAlpha = a * 0.6;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, r * 0.92, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // 4. 八芒星爆
+    if (p < 0.4) {
+      const sp = 1 - p/0.4;
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(p * 5);
+      const r1 = 12 + sp*30, r2 = 4 + sp*10;
+      ctx.fillStyle = this.color;
+      ctx.globalAlpha = sp;
+      ctx.beginPath();
+      for (let i=0;i<16;i++){
+        const a = i * Math.PI / 8;
+        const r = i%2===0 ? r1 : r2;
+        const px = Math.cos(a)*r, py = Math.sin(a)*r;
+        if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      // 內層白星
+      ctx.fillStyle = '#fff';
+      ctx.globalAlpha = sp * 0.85;
+      ctx.beginPath();
+      for (let i=0;i<16;i++){
+        const a = i * Math.PI / 8 + 0.2;
+        const r = (i%2===0 ? r1 : r2) * 0.55;
+        const px = Math.cos(a)*r, py = Math.sin(a)*r;
+        if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    // 5. 光刃(四道從中心射出)
+    if (p < 0.6) {
+      const fade = 1 - p/0.6;
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      for (const sh of this.shards) {
+        ctx.save();
+        ctx.rotate(sh.a + p*1.5);
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = fade * 0.8;
+        ctx.fillRect(8, -2.5, sh.len, 5);
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = fade;
+        ctx.fillRect(8, -1, sh.len, 2);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    // 6. 粒子
+    for (const s of this.sparkles) {
+      if (s.life <= 0) continue;
+      ctx.globalAlpha = clamp(s.life, 0, 1);
+      ctx.fillStyle = s.white ? '#fff' : this.color;
+      ctx.fillRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
+    }
+    ctx.globalAlpha = 1;
+
+    // 7. Lv.X! 飄字
+    if (p > 0.08 && p < 0.95) {
+      const tp = (p - 0.08) / 0.87;
+      const yOff = -30 - tp*55;
+      const scale = 1 + (1-Math.min(1, tp*3)) * 1.5; // 從大縮到正常
+      ctx.save();
+      ctx.translate(this.x, this.y + yOff);
+      ctx.scale(scale, scale);
+      ctx.globalAlpha = (1 - tp) * 1.0;
+      ctx.font = 'bold 16px Courier New';
+      ctx.textAlign = 'center';
+      // 黑色描邊
+      ctx.fillStyle = '#000';
+      for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,1],[1,-1],[-1,1]]) {
+        ctx.fillText(`Lv.${this.level+1}!`, dx, dy);
+      }
+      ctx.fillStyle = this.color;
+      ctx.fillText(`Lv.${this.level+1}!`, 0, 0);
+      // 上方"UPGRADE"小字
+      ctx.font = 'bold 9px Courier New';
+      ctx.fillStyle = '#ffe600';
+      ctx.fillText('★ UPGRADE ★', 0, -14);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
+    }
+  }
+}
+
+// ---------------- v1.1 鏈電塔閃電效果 ----------------
+class Lightning {
+  constructor(points, color) {
+    this.color = color;
+    this.life = 0.22;
+    this.maxLife = 0.22;
+    this.dead = false;
+    // 為每段預先計算鋸齒折線
+    this.segs = [];
+    for (let i=0;i<points.length-1;i++){
+      const a = points[i], b = points[i+1];
+      const dx = b.x-a.x, dy = b.y-a.y;
+      const len = Math.hypot(dx,dy) || 1;
+      const pts = [a];
+      const n = 4;
+      for (let k=1;k<n;k++){
+        const tt = k/n;
+        const mx = a.x + dx*tt, my = a.y + dy*tt;
+        const off = (Math.random()*2-1) * Math.min(11, len*0.18);
+        pts.push({ x: mx - dy/len*off, y: my + dx/len*off });
+      }
+      pts.push(b);
+      this.segs.push(pts);
+    }
+  }
+  update(dt) { this.life -= dt; if (this.life <= 0) this.dead = true; }
+  draw(ctx) {
+    const a = clamp(this.life/this.maxLife, 0, 1);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // 外層彩色光暈
+    ctx.globalAlpha = a * 0.85;
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = 4;
+    for (const seg of this.segs) {
+      ctx.beginPath();
+      ctx.moveTo(seg[0].x, seg[0].y);
+      for (let i=1;i<seg.length;i++) ctx.lineTo(seg[i].x, seg[i].y);
+      ctx.stroke();
+    }
+    // 內層白色電芯
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    for (const seg of this.segs) {
+      ctx.beginPath();
+      ctx.moveTo(seg[0].x, seg[0].y);
+      for (let i=1;i<seg.length;i++) ctx.lineTo(seg[i].x, seg[i].y);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ---------------- v6 浮動文字 (+X⚡ 等) ----------------
+function spawnFloatText(x, y, text, color='#ffd700') {
+  Game.floatTexts.push({
+    x: x + (Math.random()*16-8),
+    y: y - 6,
+    text, color,
+    life: 1.0,
+    maxLife: 1.0,
+    vy: -45
+  });
+}
+function updateFloatTexts(dt) {
+  for (const f of Game.floatTexts) {
+    f.life -= dt;
+    f.y += f.vy * dt;
+    f.vy *= 0.94; // 漸緩
+  }
+  Game.floatTexts = Game.floatTexts.filter(f => f.life > 0);
+}
+function drawFloatTexts(ctx) {
+  ctx.save();
+  ctx.font = 'bold 13px Courier New';
+  ctx.textAlign = 'center';
+  for (const f of Game.floatTexts) {
+    const a = clamp(f.life, 0, 1);
+    const scale = 1 + (1 - f.life) * 0.3;
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = a;
+    // 黑色描邊
+    ctx.fillStyle = '#000';
+    for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,1]]) {
+      ctx.fillText(f.text, dx, dy);
+    }
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+// ---------------- Particles ----------------
+function spawnParticles(x, y, color, n) {
+  for (let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2;
+    const sp = Math.random()*120 + 30;
+    Game.particles.push({
+      x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+      life: 0.4+Math.random()*0.4, color, size: 2+Math.random()*2
+    });
+  }
+}
+function updateParticles(dt) {
+  for (const p of Game.particles) {
+    p.life -= dt;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= 0.95; p.vy *= 0.95;
+  }
+  Game.particles = Game.particles.filter(p => p.life > 0);
+}
+function drawParticles(ctx) {
+  for (const p of Game.particles) {
+    ctx.globalAlpha = clamp(p.life*2, 0, 1);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---------------- Wave manager ----------------
+// v1.1:手工波(1-12)後段注入機制怪物,讓玩家在進入程序波前先見識新敵人
+function getMechanicExtras(waveNum) {
+  const extras = [];
+  if (waveNum >= 7)  extras.push({type:'charger',   count: 2, interval: 1.6, delay: 5});
+  if (waveNum >= 8)  extras.push({type:'splitter',  count: 2, interval: 1.8, delay: 6});
+  if (waveNum >= 9)  extras.push({type:'aegis',     count: 1, interval: 2.0, delay: 7});
+  if (waveNum >= 10) extras.push({type:'summoner',  count: 1, interval: 4.0, delay: 10});
+  if (waveNum >= 11) extras.push({type:'regen',     count: 2, interval: 2.2, delay: 8});
+  if (waveNum >= 11) extras.push({type:'bomber',    count: 2, interval: 1.6, delay: 9});
+  if (waveNum >= 12) extras.push({type:'disruptor', count: 1, interval: 3.5, delay: 9});
+  return extras;
+}
+
+// v1.1 無止盡模式:第 13 波起程序化生成,每 5 波為 BOSS 波
+function buildProceduralWave(waveNum) {
+  const groups = [];
+  const tier = waveNum;
+  // 基礎雜兵潮 — 數量隨波次成長
+  groups.push({type:'soldier', count: 12 + Math.floor(tier*0.8), interval: 0.4});
+  groups.push({type:'drone',   count: 14 + tier,                 interval: 0.22, delay: 3});
+  groups.push({type:'tank',    count: 4 + Math.floor(tier*0.4),  interval: 1.0,  delay: 5});
+  groups.push({type:'elite',   count: 2 + Math.floor(tier/6),    interval: 2.2,  delay: 8});
+  // 機制怪輪番登場
+  groups.push({type:'splitter',  count: 3 + Math.floor(tier/8),  interval: 1.6, delay: 6});
+  groups.push({type:'charger',   count: 3 + Math.floor(tier/9),  interval: 1.3, delay: 5});
+  if (tier >= 14) groups.push({type:'bomber',    count: 2 + Math.floor(tier/12), interval: 1.5, delay: 8});
+  if (tier >= 15) groups.push({type:'regen',     count: 2 + Math.floor(tier/10), interval: 2.0, delay: 9});
+  if (tier >= 16) groups.push({type:'aegis',     count: 1 + Math.floor(tier/18), interval: 2.4, delay: 6});
+  if (tier >= 17) groups.push({type:'summoner',  count: 1 + Math.floor(tier/16), interval: 4.0, delay: 11});
+  if (tier >= 19) groups.push({type:'disruptor', count: 1 + Math.floor(tier/16), interval: 3.5, delay: 7});
+  // 進階敵人
+  groups.push({type:'shield',  count: 3 + Math.floor(tier/10), interval: 1.4, delay: 4});
+  if (tier >= 16) groups.push({type:'berserker', count: 3 + Math.floor(tier/12), interval: 1.0, delay: 6});
+  if (tier >= 21) groups.push({type:'phantom',   count: 2 + Math.floor(tier/18), interval: 1.6, delay: 10});
+  if (tier >= 14) groups.push({type:'healer',    count: 1 + Math.floor(tier/22), interval: 2.0, delay: 12});
+  // BOSS 波(每 5 波)
+  if (waveNum % 5 === 0) {
+    const bossCount = 1 + Math.floor((waveNum-10)/15);
+    groups.push({type:'boss',     count: bossCount,                   interval: 6, delay: 4});
+    groups.push({type:'miniboss', count: 2 + Math.floor(waveNum/10),  interval: 4, delay: 2});
+  } else {
+    groups.push({type:'miniboss', count: 1 + Math.floor(tier/20),     interval: 5, delay: 12});
+  }
+  return groups;
+}
+
+function startWave() {
+  if (Game.waveActive || Game.ended) return;
+  Game.wave++;
+  // v1.2 BOSS 波詛咒:第 10 波後每 5 波(BOSS 波)抽一個永久累積 debuff
+  if (Game.wave > 10 && Game.wave % 5 === 0) rollDebuff();
+  // v1.1 無止盡:前 12 波用手工波(尾段注入機制怪),之後程序化生成
+  let def;
+  if (Game.wave <= WAVES.length) {
+    def = WAVES[Game.wave-1].concat(getMechanicExtras(Game.wave));
+  } else {
+    def = buildProceduralWave(Game.wave);
+  }
+  Game.spawnQueue = [];
+  const dMult = difficultyMult();
+  // v1.1/v1.2:波次血量倍率 — 第 10 波後成長明顯加速(每波 +15%)
+  const buff = (1 + (Game.wave-1)*0.05 + Math.max(0, Game.wave-10)*0.10) * dMult;
+  for (const grp of def) {
+    const delay = grp.delay || 0;
+    for (let i=0;i<grp.count;i++){
+      Game.spawnQueue.push({type: grp.type, t: delay + i*grp.interval, buff});
+    }
+  }
+  // 難度進階敵人注入
+  const extras = getDifficultyExtras(Game.wave, Game.difficulty);
+  for (const grp of extras) {
+    const delay = grp.delay || 0;
+    for (let i=0;i<grp.count;i++){
+      Game.spawnQueue.push({type: grp.type, t: delay + i*grp.interval, buff});
+    }
+  }
+  Game.spawnQueue.sort((a,b)=>a.t-b.t);
+  Game.waveActive = true;
+  Game.waveCleared = false;
+  Game.waveT = 0;
+  // v1.2 系統故障 debuff:每波隨機癱瘓 N 座砲台(整波當機)
+  if (Game.fx.fault > 0) {
+    const pool = Game.towers.filter(t => !t.dead);
+    for (let i=0; i<Game.fx.fault && pool.length; i++){
+      const t = pool.splice(Math.floor(Math.random()*pool.length), 1)[0];
+      t.faulted = true;
+      log(`⚠ 系統故障:${t.def.name} 本波當機`, 'e-bad');
+    }
+  }
+  // v4:固定經濟改在「部屬階段」發放,這裡不再發
+  if (Game.wave % 5 === 0) log(`◆◆ 第 ${Game.wave} 波 — BOSS 波次來襲! ◆◆`, 'e-bad');
+  else log(`第 ${Game.wave} 波開始!`, 'e-warn');
+  AudioFX.waveStart();
+  updateUI();
+}
+
+// v4 新增:在進入下一波部屬階段時發放固定經濟
+function grantDeployBonus(nextWaveNum) {
+  Game.gold += WAVE_FIXED_BONUS;
+  log(`▼ 第 ${nextWaveNum} 波部屬階段 ⚡+${WAVE_FIXED_BONUS} ▼`, 'e-warn');
+  updateUI();
+}
+function updateWave(dt) {
+  if (!Game.waveActive) return;
+  Game.waveT += dt;
+  while (Game.spawnQueue.length && Game.spawnQueue[0].t <= Game.waveT) {
+    const s = Game.spawnQueue.shift();
+    Game.enemies.push(new Enemy(s.type, s.buff));
+  }
+  if (Game.spawnQueue.length === 0 && Game.enemies.every(e=>e.dead||e.reachedEnd)) {
+    Game.waveActive = false;
+    Game.waveCleared = true;
+    log(`第 ${Game.wave} 波清除!`, 'e-good');
+    // v5:機甲波次結束回血(Lv1/2/3 = 20%/30%/50% maxHp)
+    for (const t of Game.towers) {
+      if (t.isMech && !t.dead && t.hp < t.maxHp) {
+        const pct = t.stats.waveHealPct || 0.20;
+        const heal = Math.ceil(t.maxHp * pct);
+        const before = t.hp;
+        t.hp = Math.min(t.maxHp, t.hp + heal);
+        spawnParticles(t.x, t.y, '#33ff99', 10);
+        log(`機甲回血 +${Math.floor(t.hp-before)} (Lv${t.level+1} ${Math.round(pct*100)}%)`, 'e-good');
+      }
+    }
+    // v1.2:清除本波的「系統故障」癱瘓,下一波會重新隨機
+    for (const t of Game.towers) t.faulted = false;
+    // v1.1 無止盡模式:沒有勝利條件,清波後直接進入下一波部屬階段
+    grantDeployBonus(Game.wave + 1);
+    // v1.2:若開啟自動模式,設定下一波倒數
+    if (Game.autoStart) Game.autoCountdown = AUTO_DELAY;
+    updateUI();
+    // v1.3:每 5 波清除後,玩家 3 選 1 強化(會暫停遊戲彈出選擇)
+    if (Game.wave % 5 === 0 && !Game.ended) showBuffChoice();
+  }
+}
+
+// ---------------- Game logic ----------------
+function placeTower(type, gx, gy) {
+  if (gx<0 || gx>=COLS || gy<0 || gy>=ROWS) return false;
+  if (!buildGrid[gx][gy]) {
+    // for mech allow on path
+    if (type !== 'mech') return false;
+  }
+  // can't place on existing tower
+  const px = gx*TILE + TILE/2;
+  const py = gy*TILE + TILE/2;
+  for (const t of Game.towers) {
+    if (!t.dead && t.x === px && t.y === py) return false;
+  }
+  // 部署上限
+  const aliveCount = Game.towers.filter(t => !t.dead).length;
+  if (aliveCount >= MAX_TOWERS) {
+    log(`部署已達上限 ${MAX_TOWERS}!請先拆除舊單位`, 'e-bad');
+    return false;
+  }
+  const def = TOWER_DEFS[type];
+  if (Game.gold < def.cost) {
+    log('能源不足!', 'e-bad');
+    return false;
+  }
+  // mech must be on path
+  if (type === 'mech') {
+    // require path tile
+    if (buildGrid[gx][gy]) {
+      log('機甲只能部署在路徑上', 'e-bad');
+      return false;
+    }
+    AudioFX.deploy();
+  } else {
+    AudioFX.place();
+  }
+  Game.gold -= def.cost;
+  // v8:軌道砲帶入部署方向
+  const t = new Tower(type, px, py, type === 'rail' ? Game.placeDir : 0);
+  Game.towers.push(t);
+  spawnParticles(px, py, def.color, 14);
+  if (type === 'rail') {
+    const dirName = ['→ 右','↓ 下','← 左','↑ 上'][Math.round(Game.placeDir/(Math.PI/2))%4];
+    log(`部署 ${def.name} (方向 ${dirName})`, 'e-good');
+  } else {
+    log(`部署 ${def.name}`, 'e-good');
+  }
+  updateUI();
+  return true;
+}
+
+function endGame(win) {
+  Game.ended = true;
+  const screen = document.getElementById('end-screen');
+  screen.classList.toggle('win', win);
+  screen.classList.toggle('lose', !win);
+  screen.style.display = 'flex';
+  document.getElementById('end-title').textContent = win ? '★ 防禦成功 ★' : '◆ 系統淪陷 ◆';
+  document.getElementById('end-msg').textContent = win
+    ? '你成功擊退所有侵略者!'
+    : `堅持到第 ${Game.wave} 波`;
+  document.getElementById('end-stats').textContent = `最終分數: ${Game.score}`;
+  if (win) AudioFX.win(); else AudioFX.lose();
+}
+
+// ---------------- Rendering ----------------
+function drawBackground() {
+  // dark gradient
+  ctx.fillStyle = '#02030a';
+  ctx.fillRect(0,0,W,H);
+
+  // stars
+  for (const s of Game.starfield) {
+    s.x -= s.v;
+    if (s.x < 0) s.x = W;
+    ctx.fillStyle = `rgba(200,220,255,${0.3+s.s*0.4})`;
+    ctx.fillRect(s.x, s.y, s.s, s.s);
+  }
+
+  // grid (subtle)
+  ctx.strokeStyle = 'rgba(40, 80, 120, 0.18)';
+  ctx.lineWidth = 1;
+  for (let x=0;x<=W;x+=TILE){ ctx.beginPath(); ctx.moveTo(x+0.5,0); ctx.lineTo(x+0.5,H); ctx.stroke();}
+  for (let y=0;y<=H;y+=TILE){ ctx.beginPath(); ctx.moveTo(0,y+0.5); ctx.lineTo(W,y+0.5); ctx.stroke();}
+}
+
+function drawPath() {
+  // path glow
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.strokeStyle = 'rgba(255, 0, 234, 0.15)';
+  ctx.lineWidth = 50;
+  ctx.beginPath();
+  for (let i=0;i<PATH.length;i++){
+    const p = PATH[i];
+    if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle = '#1a0a2e';
+  ctx.lineWidth = 36;
+  ctx.beginPath();
+  for (let i=0;i<PATH.length;i++){
+    const p = PATH[i];
+    if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+
+  // center line with dashes
+  ctx.strokeStyle = '#ff00ea';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]);
+  ctx.lineDashOffset = -Game.time*30;
+  ctx.beginPath();
+  for (let i=0;i<PATH.length;i++){
+    const p = PATH[i];
+    if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // start & end markers
+  ctx.fillStyle = '#00ff66';
+  ctx.fillRect(0, PATH[0].y-22, 6, 44);
+  ctx.fillStyle = '#ff4d6d';
+  ctx.fillRect(W-6, PATH[PATH.length-1].y-22, 6, 44);
+}
+
+function drawBuildOverlay() {
+  if (!Game.selected || !Game.mouse.over) return;
+  const gx = Math.floor(Game.mouse.x/TILE);
+  const gy = Math.floor(Game.mouse.y/TILE);
+  if (gx<0||gx>=COLS||gy<0||gy>=ROWS) return;
+  const ok = canPlaceAt(Game.selected, gx, gy);
+  ctx.fillStyle = ok ? 'rgba(0, 255, 102, 0.25)' : 'rgba(255, 77, 109, 0.25)';
+  ctx.fillRect(gx*TILE, gy*TILE, TILE, TILE);
+  ctx.strokeStyle = ok ? '#00ff66' : '#ff4d6d';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(gx*TILE+1, gy*TILE+1, TILE-2, TILE-2);
+
+  // range preview
+  const def = TOWER_DEFS[Game.selected];
+  const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
+  if (Game.selected === 'rail') {
+    // v8:軌道砲 — 直線方向預覽
+    const dx = Math.cos(Game.placeDir), dy = Math.sin(Game.placeDir);
+    const ex = cx + dx*2000, ey = cy + dy*2000;
+    ctx.lineCap = 'round';
+    // 直線範圍區
+    ctx.strokeStyle = def.color;
+    ctx.globalAlpha = 0.18;
+    ctx.lineWidth = 40;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+    // 中央亮線
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.globalAlpha = 1;
+    // 方向箭頭
+    ctx.save();
+    ctx.translate(cx + dx*46, cy + dy*46);
+    ctx.rotate(Game.placeDir);
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(10, 0); ctx.lineTo(-6, -8); ctx.lineTo(-6, 8);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // 提示文字
+    ctx.fillStyle = '#ffe600';
+    ctx.font = 'bold 11px Courier New';
+    ctx.fillText('按 R 旋轉方向', cx - 36, cy - 28);
+  } else {
+    ctx.strokeStyle = def.color;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, def.range, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = def.color;
+    ctx.beginPath();
+    ctx.arc(cx, cy, def.range, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function canPlaceAt(type, gx, gy) {
+  if (gx<0||gx>=COLS||gy<0||gy>=ROWS) return false;
+  const buildable = buildGrid[gx][gy];
+  if (type === 'mech') {
+    if (buildable) return false; // mech must be on path
+  } else {
+    if (!buildable) return false;
+  }
+  const px = gx*TILE+TILE/2, py = gy*TILE+TILE/2;
+  for (const t of Game.towers) {
+    if (!t.dead && t.x===px && t.y===py) return false;
+  }
+  return true;
+}
+
+function drawSelectedRange() {
+  if (Game.selectedTower && !Game.selectedTower.dead) {
+    const t = Game.selectedTower;
+    const s = t.stats;
+    const er = s.range * Game.fx.towerRange; // v1.2:含詛咒後的有效射程
+    if (t.type === 'rail') {
+      // v8:軌道砲 — 顯示直線攻擊範圍
+      const dx = Math.cos(t.fireAngle), dy = Math.sin(t.fireAngle);
+      const ex = t.x + dx*er, ey = t.y + dy*er;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = t.def.color;
+      ctx.globalAlpha = 0.2;
+      ctx.lineWidth = 40;
+      ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.strokeStyle = t.def.color;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.arc(t.x, t.y, er, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle = t.def.color;
+      ctx.beginPath(); ctx.arc(t.x, t.y, er, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // selection ring
+    ctx.strokeStyle = '#ffe600';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(t.x-19, t.y-19, 38, 38);
+  }
+}
+
+// ---------------- v1.1 指揮塔增益 ----------------
+// 每幀重算:範圍內非支援型砲台獲得傷害/射速加成(可多塔疊加,加法)
+function applySupportBuffs() {
+  for (const t of Game.towers) { t.dmgMult = 1; t.fireRateMult = 1; }
+  for (const sup of Game.towers) {
+    if (sup.dead || !sup.def.isSupport) continue;
+    if (sup.disabledTimer > 0 || sup.faulted) continue; // 被干擾/故障時增益失效
+    const s = sup.stats;
+    for (const t of Game.towers) {
+      if (t === sup || t.dead || t.def.isSupport) continue;
+      if (dist(sup, t) <= s.range * Game.fx.towerRange) {
+        t.dmgMult += s.dmgBonus;
+        t.fireRateMult += s.fireRateBonus;
+      }
+    }
+  }
+}
+
+// ---------------- Main loop (Fixed Timestep) ----------------
+// 採用固定時間步,讓 1x/2x/3x 速度產生完全一致的模擬結果
+const FIXED_DT = 1/60;
+let lastTs = 0;
+let simAccumulator = 0;
+
+function simulate(dt) {
+  Game.time += dt;
+  updateWave(dt);
+  // v1.2 自動開始下一波:閒置時倒數,歸零即開波
+  if (Game.autoStart && !Game.waveActive && !Game.ended && Game.autoCountdown > 0) {
+    Game.autoCountdown -= dt;
+    if (Game.autoCountdown <= 0) startWave();
+  }
+  applySupportBuffs(); // v1.1:先計算指揮塔增益
+  for (const t of Game.towers) t.update(dt);
+  for (const e of Game.enemies) {
+    e.update(dt);
+    if (e.reachedEnd && !e.dead) {
+      e.dead = true;
+      Game.lives -= e.def.dmg;
+      AudioFX.lifeLost();
+      log(`敵人突破! -${e.def.dmg}HP`, 'e-bad');
+      if (Game.lives <= 0 && !Game.ended) {
+        Game.lives = 0;
+        endGame(false);
+      }
+      updateUI();
+    }
+  }
+  for (const p of Game.projectiles) p.update(dt);
+  for (const ue of Game.upgradeEffects) ue.update(dt);
+  for (const lt of Game.lightnings) lt.update(dt);
+  updateParticles(dt);
+  updateFloatTexts(dt);
+  // v1.1:處理延後生成佇列(分裂體分裂 / 召喚者召喚)
+  if (Game.spawnLater.length) {
+    for (const s of Game.spawnLater) Game.enemies.push(new Enemy(s.type, s.buff, s));
+    Game.spawnLater.length = 0;
+  }
+  // cleanup
+  Game.towers = Game.towers.filter(t => !t.dead);
+  Game.enemies = Game.enemies.filter(e => !e.dead);
+  Game.projectiles = Game.projectiles.filter(p => !p.dead);
+  Game.upgradeEffects = Game.upgradeEffects.filter(ue => !ue.dead);
+  Game.lightnings = Game.lightnings.filter(lt => !lt.dead);
+  if (Game.selectedTower && Game.selectedTower.dead) { Game.selectedTower = null; updateTowerInfo(); }
+}
+
+function render() {
+  drawBackground();
+  drawPath();
+  drawObstacles();
+  drawSelectedRange();
+  for (const t of Game.towers) t.draw(ctx);
+  for (const e of Game.enemies) e.draw(ctx);
+  for (const p of Game.projectiles) p.draw(ctx);
+  for (const lt of Game.lightnings) lt.draw(ctx);
+  drawParticles(ctx);
+  for (const ue of Game.upgradeEffects) ue.draw(ctx);
+  drawFloatTexts(ctx);
+  drawBuildOverlay();
+  if (Game.waveActive) {
+    ctx.fillStyle = '#ff4d6d';
+    ctx.font = 'bold 14px Courier New';
+    ctx.fillText(`◆ WAVE ${Game.wave} ◆`, 12, 22);
+  }
+  // v1.2 自動開波倒數提示
+  if (Game.autoStart && !Game.waveActive && !Game.ended && Game.autoCountdown > 0) {
+    ctx.fillStyle = '#00ffe1';
+    ctx.font = 'bold 13px Courier New';
+    ctx.fillText(`自動下一波:${Math.ceil(Game.autoCountdown)}s`, 12, 40);
+  }
+  // v1.2 BOSS 詛咒列表(畫面右上角)
+  if (Game.debuffs.length) {
+    const counts = {};
+    for (const d of Game.debuffs) counts[d.id] = (counts[d.id]||0)+1;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ff4d6d';
+    ctx.font = 'bold 11px Courier New';
+    ctx.fillText(`☠ 詛咒 ×${Game.debuffs.length}`, W-10, 16);
+    ctx.font = '10px Courier New';
+    let yy = 30;
+    for (const id in counts) {
+      const d = DEBUFF_POOL.find(x => x.id === id);
+      ctx.fillStyle = '#ffb0b0';
+      ctx.fillText(`${d.name}${counts[id]>1?' ×'+counts[id]:''} — ${d.desc}`, W-10, yy);
+      yy += 13;
+    }
+    ctx.textAlign = 'left';
+  }
+  // v1.3 強化列表(畫面右下角)
+  if (Game.buffs.length) {
+    const bc = {};
+    for (const b of Game.buffs) bc[b.name] = (bc[b.name]||0)+1;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#00ff88';
+    ctx.font = 'bold 11px Courier New';
+    const names = Object.keys(bc);
+    let by = H - 8 - names.length*13;
+    ctx.fillText(`✦ 強化 ×${Game.buffs.length}`, W-10, by - 4);
+    ctx.font = '10px Courier New';
+    ctx.fillStyle = '#9fe8c0';
+    for (const nm of names) {
+      ctx.fillText(`${nm}${bc[nm]>1?' ×'+bc[nm]:''}`, W-10, by);
+      by += 13;
+    }
+    ctx.textAlign = 'left';
+  }
+  document.getElementById('ui-enemies').textContent = Game.enemies.filter(e=>!e.dead && !e.reachedEnd).length + Game.spawnQueue.length;
+}
+
+function loop(ts) {
+  const rdt = Math.min(0.1, (ts - lastTs)/1000 || 0.016);
+  lastTs = ts;
+  if (!Game.paused && !Game.ended) {
+    simAccumulator += rdt * Game.speed;
+    // 防止「死亡螺旋」:大幀時最多累積 0.5 秒,等同最多 30 步
+    if (simAccumulator > 0.5) simAccumulator = 0.5;
+    while (simAccumulator >= FIXED_DT) {
+      simulate(FIXED_DT);
+      simAccumulator -= FIXED_DT;
+    }
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ---------------- UI ----------------
+function buildTowerList() {
+  const list = document.getElementById('tower-list');
+  list.innerHTML = '';
+  TOWER_ORDER.forEach((type, idx) => {
+    const def = TOWER_DEFS[type];
+    const btn = document.createElement('div');
+    btn.className = 'tower-btn';
+    btn.dataset.type = type;
+    btn.innerHTML = `
+      <canvas class="tower-icon" width="28" height="28"></canvas>
+      <div class="tower-info">
+        <div class="name">${idx+1}. ${def.name}</div>
+        <div class="cost">${def.cost} ⚡</div>
+        <div class="desc">${def.desc}</div>
+      </div>
+    `;
+    btn.addEventListener('click', () => selectTower(type));
+    list.appendChild(btn);
+    // draw icon
+    const ic = btn.querySelector('canvas');
+    const ictx = ic.getContext('2d');
+    ictx.imageSmoothingEnabled = false;
+    drawTowerIcon(ictx, type);
+  });
+}
+function drawTowerIcon(c, type) {
+  c.fillStyle = '#02030a'; c.fillRect(0,0,28,28);
+  c.save();
+  c.translate(14,14);
+  c.scale(0.7, 0.7);
+  const fakeTower = {type, def: TOWER_DEFS[type], angle: -Math.PI/4, x:0, y:0, shotFlash:0, level:0, isMech: TOWER_DEFS[type].isMech, hp:1, maxHp:1, dead:false};
+  c.translate(-fakeTower.x, -fakeTower.y);
+  drawTowerPixel(c, fakeTower);
+  c.restore();
+}
+function selectTower(type) {
+  if (Game.gold < TOWER_DEFS[type].cost) {
+    log('能源不足!', 'e-bad');
+    return;
+  }
+  Game.selected = (Game.selected === type) ? null : type;
+  Game.selectedTower = null;
+  updateTowerButtons();
+  updateTowerInfo();
+}
+function updateTowerButtons() {
+  document.querySelectorAll('.tower-btn').forEach(b => {
+    const type = b.dataset.type;
+    b.classList.toggle('selected', Game.selected === type);
+    b.classList.toggle('disabled', Game.gold < TOWER_DEFS[type].cost);
+  });
+}
+function updateUI() {
+  document.getElementById('ui-lives').textContent = Game.lives;
+  document.getElementById('ui-gold').textContent = Game.gold;
+  document.getElementById('ui-difficulty').textContent = `${Game.difficulty} (x${DIFFICULTY_INFO[Game.difficulty].mult.toFixed(2)})`;
+  document.getElementById('ui-wave').textContent = `${Game.wave} ∞`;
+  document.getElementById('ui-score').textContent = Game.score;
+  const alive = Game.towers.filter(t=>!t.dead).length;
+  const tcell = document.getElementById('ui-towers');
+  tcell.textContent = `${alive}/${MAX_TOWERS}`;
+  tcell.style.color = alive >= MAX_TOWERS ? '#ff4d6d' : '#ffe600';
+  updateTowerButtons();
+  const startBtn = document.getElementById('start-wave-btn');
+  startBtn.disabled = Game.waveActive || Game.ended;
+  // v1.1 無止盡:永遠有下一波,Boss 波特別標示
+  const next = Game.wave + 1;
+  startBtn.textContent = Game.waveActive ? '進行中…'
+    : (next % 5 === 0 ? `BOSS波 (${next})` : `下一波 (${next})`);
+}
+function updateTowerInfo() {
+  const body = document.getElementById('tower-info-body');
+  if (Game.selectedTower && !Game.selectedTower.dead) {
+    const t = Game.selectedTower;
+    const s = t.stats;
+    let html = `<div style="color:${t.def.color}; font-weight:bold; font-size:13px; margin-bottom:6px;">${t.def.name} Lv.${t.level+1}</div>`;
+    html += `<div class="tinfo-row"><span class="l">射程</span><span class="r">${Math.floor(s.range)}</span></div>`;
+    if (t.def.isSupport) {
+      // v1.1 指揮塔:顯示增益數值
+      html += `<div class="tinfo-row"><span class="l">傷害增益</span><span class="r">+${Math.round(s.dmgBonus*100)}%</span></div>`;
+      html += `<div class="tinfo-row"><span class="l">射速增益</span><span class="r">+${Math.round(s.fireRateBonus*100)}%</span></div>`;
+      html += `<div style="font-size:9px;color:#99aabb;margin-top:3px;">範圍內砲台自動獲得增益,可多塔疊加</div>`;
+    } else {
+      const buffed = t.dmgMult > 1 || t.fireRateMult > 1;
+      const bTag = buffed ? ' <span style="color:#ffb84d">▲</span>' : '';
+      html += `<div class="tinfo-row"><span class="l">傷害</span><span class="r">${Math.floor(s.dmg*t.dmgMult)}${bTag}</span></div>`;
+      html += `<div class="tinfo-row"><span class="l">射速</span><span class="r">${(s.fireRate*t.fireRateMult).toFixed(1)}/秒${bTag}</span></div>`;
+      if (s.chainCount) html += `<div class="tinfo-row"><span class="l">連鎖</span><span class="r">${s.chainCount+1} 目標</span></div>`;
+      if (s.poison) html += `<div class="tinfo-row"><span class="l">毒性</span><span class="r">+${s.poison}/s × ${s.poisonDur}s</span></div>`;
+      if (s.splash) html += `<div class="tinfo-row"><span class="l">爆風</span><span class="r">${s.splash}</span></div>`;
+      if (s.slow) html += `<div class="tinfo-row"><span class="l">減速</span><span class="r">${Math.floor(s.slow*100)}%</span></div>`;
+      if (s.pierce) html += `<div class="tinfo-row"><span class="l">穿透</span><span class="r">${s.pierce}</span></div>`;
+      if (t.isMech) html += `<div class="tinfo-row"><span class="l">HP</span><span class="r">${Math.floor(t.hp)}/${t.maxHp}</span></div>`;
+    }
+    if (t.disabledTimer > 0) html += `<div class="tinfo-row"><span class="l" style="color:#b35cff">狀態</span><span class="r" style="color:#b35cff">被干擾癱瘓!</span></div>`;
+    html += `<div style="margin-top:8px; display:flex; gap:4px;">`;
+    if (t.canUpgrade()) {
+      const cu = t.upgradeCost();
+      html += `<button class="action" id="upg-btn" ${Game.gold<cu?'disabled':''} style="flex:1; padding:6px; font-size:11px;">升級 ${cu}⚡</button>`;
+    } else {
+      html += `<button class="action" disabled style="flex:1; padding:6px; font-size:11px;">已滿級</button>`;
+    }
+    const sellRet = Math.floor(t.totalCost*0.6);
+    html += `<button class="action danger" id="sell-btn" style="flex:1; padding:6px; font-size:11px;">拆除 +${sellRet}</button>`;
+    html += `</div>`;
+    body.innerHTML = html;
+    document.getElementById('upg-btn')?.addEventListener('click', () => {
+      t.upgrade();
+      updateUI();
+      updateTowerInfo();
+    });
+    document.getElementById('sell-btn')?.addEventListener('click', () => {
+      t.sell();
+      Game.selectedTower = null;
+      updateUI();
+      updateTowerInfo();
+    });
+  } else if (Game.selected) {
+    const def = TOWER_DEFS[Game.selected];
+    let h = `<div style="color:${def.color}; font-weight:bold; font-size:13px;">${def.name}</div>
+      <div style="font-size:10px; color:#99aabb; margin:4px 0;">${def.desc}</div>
+      <div class="tinfo-row"><span class="l">花費</span><span class="r">${def.cost}⚡</span></div>
+      <div class="tinfo-row"><span class="l">射程</span><span class="r">${def.range}</span></div>`;
+    if (def.isSupport) {
+      h += `<div class="tinfo-row"><span class="l">傷害增益</span><span class="r">+${Math.round(def.dmgBonus*100)}%</span></div>`;
+      h += `<div class="tinfo-row"><span class="l">射速增益</span><span class="r">+${Math.round(def.fireRateBonus*100)}%</span></div>`;
+    } else {
+      h += `<div class="tinfo-row"><span class="l">傷害</span><span class="r">${def.dmg}</span></div>`;
+      h += `<div class="tinfo-row"><span class="l">射速</span><span class="r">${def.fireRate}/秒</span></div>`;
+      if (def.chainCount) h += `<div class="tinfo-row"><span class="l">連鎖</span><span class="r">${def.chainCount+1} 目標</span></div>`;
+      if (def.poison) h += `<div class="tinfo-row"><span class="l">毒性</span><span class="r">+${def.poison}/s × ${def.poisonDur}s</span></div>`;
+    }
+    h += `<div style="margin-top:6px; color:#ffe600; font-size:10px;">點擊地圖${Game.selected==='mech'?'路徑':'空格'}部署</div>`;
+    body.innerHTML = h;
+  } else {
+    body.innerHTML = '點選地圖上的塔查看資訊';
+  }
+}
+
+// ---------------- Input ----------------
+canvas.addEventListener('mousemove', e => {
+  const r = canvas.getBoundingClientRect();
+  Game.mouse.x = (e.clientX - r.left) * (W / r.width);
+  Game.mouse.y = (e.clientY - r.top) * (H / r.height);
+  Game.mouse.over = true;
+});
+canvas.addEventListener('mouseleave', () => Game.mouse.over = false);
+canvas.addEventListener('click', e => {
+  const r = canvas.getBoundingClientRect();
+  const mx = (e.clientX - r.left) * (W / r.width);
+  const my = (e.clientY - r.top) * (H / r.height);
+  const gx = Math.floor(mx/TILE), gy = Math.floor(my/TILE);
+
+  if (Game.selected) {
+    if (placeTower(Game.selected, gx, gy)) {
+      if (Game.gold < TOWER_DEFS[Game.selected].cost) {
+        Game.selected = null;
+        updateTowerButtons();
+        updateTowerInfo();
+      }
+    }
+    return;
+  }
+  // click on a tower
+  let clicked = null;
+  for (const t of Game.towers) {
+    if (dist({x:mx,y:my}, t) < 20) { clicked = t; break; }
+  }
+  Game.selectedTower = clicked;
+  updateTowerInfo();
+});
+
+document.getElementById('start-wave-btn').addEventListener('click', startWave);
+document.getElementById('speed-btn').addEventListener('click', () => {
+  Game.speed = Game.speed === 1 ? 2 : (Game.speed === 2 ? 3 : 1);
+  document.getElementById('speed-btn').textContent = Game.speed + 'x';
+});
+// v1.2 自動開始下一波切換
+document.getElementById('auto-btn').addEventListener('click', () => {
+  Game.autoStart = !Game.autoStart;
+  const btn = document.getElementById('auto-btn');
+  btn.textContent = '自動:' + (Game.autoStart ? '開' : '關');
+  btn.classList.toggle('selected', Game.autoStart);
+  // 開啟時若正處於部屬階段(非進行中),立即開始倒數
+  if (Game.autoStart && !Game.waveActive && !Game.ended) Game.autoCountdown = AUTO_DELAY;
+  log(`自動開波:${Game.autoStart ? '開啟' : '關閉'}`, 'e-warn');
+});
+// 難度選擇器
+function buildDifficultySelector() {
+  const grid = document.getElementById('diff-grid');
+  grid.innerHTML = '';
+  for (let i=1;i<=10;i++){
+    const b = document.createElement('button');
+    b.className = 'diff-btn';
+    b.dataset.diff = i;
+    b.textContent = i;
+    if (i === Game.difficulty) b.classList.add('active');
+    b.addEventListener('click', () => setDifficulty(i));
+    grid.appendChild(b);
+  }
+  updateDifficultyDesc();
+}
+function setDifficulty(d) {
+  Game.difficulty = d;
+  document.querySelectorAll('.diff-btn').forEach(b => {
+    b.classList.toggle('active', +b.dataset.diff === d);
+  });
+  updateDifficultyDesc();
+}
+function updateDifficultyDesc() {
+  const info = DIFFICULTY_INFO[Game.difficulty];
+  const mult = info.mult;
+  const unlocks = [];
+  for (let i=1;i<=Game.difficulty;i++){
+    const u = DIFFICULTY_INFO[i].unlock;
+    if (u) unlocks.push(ENEMY_DEFS[u].name);
+  }
+  let html = `難度 ${Game.difficulty}/10 — 敵人血量 <span class="multiplier">x${mult.toFixed(2)}</span>`;
+  html += `<br>${info.desc}`;
+  if (unlocks.length) html += ` <span class="unlock">[已解鎖: ${unlocks.join('、')}]</span>`;
+  document.getElementById('diff-desc').innerHTML = html;
+}
+
+document.getElementById('play-btn').addEventListener('click', () => {
+  document.getElementById('title-screen').style.display = 'none';
+  AudioFX.waveStart();
+  log(`系統啟動,準備迎戰 (難度 ${Game.difficulty})`, 'e-good');
+});
+document.getElementById('restart-btn').addEventListener('click', () => location.reload());
+document.getElementById('mute-btn').addEventListener('click', () => {
+  const m = !AudioFX.isMuted();
+  AudioFX.setMuted(m);
+  document.getElementById('mute-btn').textContent = `[ 音效: ${m?'關':'開'} ]`;
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === ' ') { e.preventDefault(); if (!Game.waveActive) startWave(); }
+  else if (e.key === 'Escape') { Game.selected = null; Game.selectedTower = null; updateTowerButtons(); updateTowerInfo(); }
+  else if (e.key === 'r' || e.key === 'R') {
+    // v8:選取軌道砲時按 R 旋轉部署方向
+    if (Game.selected === 'rail') {
+      Game.placeDir = (Game.placeDir + Math.PI/2) % (Math.PI*2);
+    }
+  }
+  else if (e.key >= '1' && e.key <= '9') {
+    const t = TOWER_ORDER[parseInt(e.key)-1];
+    if (t) selectTower(t);
+  }
+});
+
+// ---------------- Init ----------------
+buildTowerList();
+buildDifficultySelector();
+updateUI();
+updateTowerInfo();
+log('歡迎來到 NEON DEFENSE', 'e-good');
+log('在左側選擇單位開始建造', 'e-warn');
+// v4:遊戲啟動就先發第 1 波的部屬資金
+grantDeployBonus(1);
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
