@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>NEON DEFENSE v1.4 - 像素塔防(無止盡模式)</title>
+<title>NEON DEFENSE v1.7 - 像素塔防(無止盡模式)</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -196,6 +196,17 @@
     font-size: 19px; color: #fff; font-weight: bold; margin-bottom: 10px;
   }
   .buff-card .bc-desc { font-size: 12px; color: #aac9ee; line-height: 1.5; }
+  /* v1.5:每張卡片同時含一個強化與一個綁定詛咒 */
+  .buff-card .bc-good {
+    font-size: 12px; color: #7CFFB0; line-height: 1.5;
+    text-shadow: 0 0 6px #00ff8866;
+  }
+  .buff-card .bc-curse {
+    margin-top: 12px; padding-top: 9px;
+    border-top: 1px dashed #5a2a3e;
+    font-size: 11px; color: #ff7088; line-height: 1.45;
+    text-shadow: 0 0 6px #ff4d6d55;
+  }
   #title-screen h1 {
     font-size: 64px;
     color: #00ffe1;
@@ -373,6 +384,12 @@
       <div class="btn-row">
         <button class="action" id="buyslot-btn">擴充部署位 +1(10000⚡)</button>
       </div>
+      <div class="btn-row">
+        <button class="action" id="buybuff-btn">購買強化 2選1(5000⚡)</button>
+      </div>
+      <div class="btn-row" id="rotate-row" style="display:none;">
+        <button class="action selected" id="rotate-dir-btn">🔄 軌道砲方向:→ 右</button>
+      </div>
     </div>
 
     <canvas id="game" width="960" height="640"></canvas>
@@ -401,9 +418,11 @@
     <div><span>►</span> 友軍機甲可放在路徑上阻擋敵人</div>
     <div><span>►</span> <span>無止盡模式</span>:波次無上限,每波越來越強,撐越久分數越高</div>
     <div><span>►</span> 每 <span>5 波</span> 出現 Boss,敵人血量/防禦隨波次持續成長</div>
+    <div><span>►</span> 每 <span>5 波</span> 三選一 <span>強化</span> — 每項強化都<span>綁定一個詛咒</span></div>
+    <div><span>►</span> 也可花 <span>5000⚡</span> 隨時購買 <span>二選一</span> 強化(同樣綁詛咒)</div>
     <div><span>►</span> 難度越高敵人越強,並解鎖 <span>盾兵/治療/狂戰士/幻影</span> 等敵人</div>
     <div><span>►</span> 後段波次會出現 <span>分裂體/召喚者/再生者/干擾者</span> 等特殊敵人</div>
-    <div><span>►</span> 軌道砲是 <span>直線攻擊</span>,選取後按 <span>R</span> 鍵旋轉部署方向</div>
+    <div><span>►</span> 軌道砲是 <span>直線攻擊</span>,選取後按 <span>R</span> 鍵或畫面 <span>旋轉按鈕</span> 轉向(會被 <span>友軍機甲</span> 擋線)</div>
     <div><span>►</span> 鍵盤 <span>1-9</span> 快速選擇單位 / <span>R</span> 轉向 / <span>空白鍵</span> 開始下一波</div>
   </div>
   <div id="difficulty-section">
@@ -422,8 +441,8 @@
 </div>
 
 <div id="buff-screen" style="display:none;">
-  <h2>★ 選擇強化 ★</h2>
-  <p>撐過第 <span id="buff-wave">5</span> 波 — 選擇一項永久強化</p>
+  <h2 id="buff-title">★ 選擇強化 ★</h2>
+  <p id="buff-sub">選擇一項強化(每項附帶一個詛咒)</p>
   <div id="buff-cards"></div>
 </div>
 
@@ -641,17 +660,22 @@ markObstacles();
 const obstacleTiles = new Set();
 for (const o of OBSTACLES) obstacleTiles.add(o.col + ',' + o.row);
 
-// v1.4:沿射線(dx,dy 為單位向量)前進,回傳碰到障礙物 / 友軍機甲前的距離
+// v1.4:沿射線(dx,dy 為單位向量)前進,回傳碰到地圖障礙物前的距離
 // 用於軌道砲的「視線阻擋」— 目標選取與直線預覽都會在障礙物前中斷
-function rayObstacleDist(x, y, dx, dy, maxLen) {
+// v1.5:友軍機甲不再阻擋射線(只剩地圖障礙物會擋)
+// v1.6:新增 blockMech 參數 — 軌道砲專用,友軍機甲會擋線(地圖障礙物 + 友軍機甲)
+// v1.7:blockMech 改為 blockTowers — 軌道砲線被「所有友軍砲台」擋住(避免兩座軌道砲對線時後座照樣穿過前座開火);
+//      新增 self 參數讓自己不會擋自己
+function rayObstacleDist(x, y, dx, dy, maxLen, blockTowers, self) {
   for (let d = 12; d <= maxLen; d += 6) {
     const px = x + dx*d, py = y + dy*d;
     if (px < 0 || px >= W || py < 0 || py >= H) return d;
     if (obstacleTiles.has(Math.floor(px/TILE) + ',' + Math.floor(py/TILE))) return d;
-    for (const t of Game.towers) {
-      if (t.isMech && !t.dead) {
-        const ex = px - t.x, ey = py - t.y;
-        if (ex*ex + ey*ey < 400) return d; // 20px
+    if (blockTowers) {
+      for (const m of Game.towers) {
+        if (m.dead || m === self) continue;
+        const ddx = m.x - px, ddy = m.y - py;
+        if (ddx*ddx + ddy*ddy < 196) return d;  // 14^2,塔/機甲半徑約 12-14
       }
     }
   }
@@ -738,20 +762,24 @@ function drawObstaclePixel(ctx, x, y, kind) {
 const TOWER_DEFS = {
   laser: {
     // v8: 升級射速提升幅度調低 (5→7→9 改為 5→6→7)
+    // v1.5: 攻擊力小幅提升 12/22/38 → 14/26/45
+    // v1.7: 攻擊力再提升 14/26/45 → 18/34/58
     name: '雷射砲塔', desc:'快速單體攻擊', cost: 60,
-    range: 110, dmg: 12, fireRate: 5, color:'#00ffe1', proj:'laser',
+    range: 110, dmg: 18, fireRate: 5, color:'#00ffe1', proj:'laser',
     upgrades:[
-      {cost:50, range:120, dmg:22, fireRate:6},
-      {cost:90, range:130, dmg:38, fireRate:7}
+      {cost:50, range:120, dmg:34, fireRate:6},
+      {cost:90, range:130, dmg:58, fireRate:7}
     ]
   },
   plasma: {
     // v5: splash×2, fireRate×1.5
-    name: '電漿砲', desc:'範圍爆炸傷害', cost: 120,
-    range: 130, dmg: 22, fireRate: 1.8, splash: 100, color:'#ff00ea', proj:'plasma',
+    // v1.5: 改為「拋擲手雷」— 射程與爆炸範圍大幅提升,彈道改為拋物線
+    // v1.7: 爆炸範圍再大幅提升 165/215/270 → 230/305/400;爆炸動畫多層衝擊環 + 中央閃光
+    name: '電漿砲', desc:'拋擲手雷 超大範圍爆炸', cost: 120,
+    range: 170, dmg: 22, fireRate: 1.8, splash: 230, color:'#ff00ea', proj:'plasma',
     upgrades:[
-      {cost:100, range:140, dmg:42, fireRate:2.4, splash:130},
-      {cost:160, range:150, dmg:75, fireRate:3.0, splash:160}
+      {cost:100, range:195, dmg:42, fireRate:2.4, splash:305},
+      {cost:160, range:225, dmg:75, fireRate:3.0, splash:400}
     ]
   },
   cryo: {
@@ -775,11 +803,12 @@ const TOWER_DEFS = {
   rail: {
     // v8: 方向性直線攻擊,部署時按 R 旋轉方向,只打直線上的敵人
     // v14/v1.2/v1.3: 連續削弱 — 傷害與射速持續下調
-    name: '軌道砲', desc:'直線穿透 (放置時按 R 轉向)', cost: 180,
-    range: 2000, dmg: 90, fireRate: 0.8, color:'#ffe600', proj:'rail', pierce: 999,
+    // v1.6: 再度削弱 — 傷害 ↓ ~20%、射速 ↓ ~14%;另外友軍機甲現在會擋線
+    name: '軌道砲', desc:'直線穿透 (放置時按 R 轉向;友軍機甲會擋線)', cost: 180,
+    range: 2000, dmg: 72, fireRate: 0.7, color:'#ffe600', proj:'rail', pierce: 999,
     upgrades:[
-      {cost:150, range:2000, dmg:160, fireRate:1.05, pierce:999},
-      {cost:220, range:2000, dmg:275, fireRate:1.35, pierce:999}
+      {cost:150, range:2000, dmg:128, fireRate:0.9, pierce:999},
+      {cost:220, range:2000, dmg:220, fireRate:1.15, pierce:999}
     ]
   },
   mech: {
@@ -831,6 +860,7 @@ const STARTING_GOLD = 100;
 const WAVE_FIXED_BONUS = 100;
 let MAX_TOWERS = 8; // v1.4:初始 8(原 10);可被「擴充槽位」buff 或購買提升
 const SLOT_COST = 10000; // v1.4:購買 1 個部署位的能源花費
+const BUFF_COST = 5000;  // v1.5:額外購買「2 選 1 強化」的能源花費
 const GLOBAL_HP_MULT = 1; // v4:暫時還原 v2 血量倍率,測試經濟是否能通關
 
 const ENEMY_DEFS = {
@@ -908,6 +938,7 @@ const Game = {
   particles: [],
   upgradeEffects: [], // 升級華麗動畫
   lightnings: [],     // v1.1: 鏈電塔閃電效果
+  blasts: [],         // v1.5: 電漿砲手雷爆炸衝擊環
   floatTexts: [],     // v6: 浮動文字(+X⚡ 等)
   spawnQueue: [], // {type, t}
   spawnLater: [], // v1.1:延後生成佇列(分裂/召喚),避免迭代中改動陣列
@@ -937,7 +968,7 @@ const Game = {
 };
 const AUTO_DELAY = 4; // 自動開波倒數秒數
 
-// v1.2 BOSS 波詛咒池(玩家選定:砲台減益 / 敵人強化 / 砲台故障)
+// v1.2 詛咒池 — v1.5:不再每 5 波固定發放,改為綁定在每張「強化卡」上一起套用
 const DEBUFF_POOL = [
   { id:'dmg',   name:'武器衰變', desc:'全砲台傷害 −12%' },
   { id:'rate',  name:'迴路過熱', desc:'全砲台射速 −12%' },
@@ -958,12 +989,14 @@ function recomputeFx() {
   Game.fx.enemyArmor = c.earm;
   Game.fx.fault      = c.fault;
 }
-function rollDebuff() {
-  const pick = DEBUFF_POOL[Math.floor(Math.random()*DEBUFF_POOL.length)];
-  Game.debuffCounts[pick.id] = (Game.debuffCounts[pick.id]||0) + 1;
-  Game.debuffs.push(pick);
+// v1.5:套用一個指定詛咒(由「強化卡」綁定觸發 — 不再固定每 5 波自動給)
+function applyCurse(id) {
+  const d = DEBUFF_POOL.find(x => x.id === id);
+  if (!d) return;
+  Game.debuffCounts[id] = (Game.debuffCounts[id]||0) + 1;
+  Game.debuffs.push(d);
   recomputeFx();
-  log(`☠ BOSS 詛咒:${pick.name} — ${pick.desc}`, 'e-bad');
+  log(`☠ 詛咒纏身:${d.name} — ${d.desc}`, 'e-bad');
 }
 
 // v1.3 每 5 波玩家 3 選 1 強化池(玩家選定:砲台強化 / 核心防禦 / 特殊效果)
@@ -1008,22 +1041,40 @@ function applyBuff(id) {
   log(`✦ 強化:${b.name} — ${b.desc}`, 'e-good');
   updateUI();
 }
-function showBuffChoice() {
+// v1.5:抽出 n 張卡片,每張卡片 = 一個強化 + 一個綁定詛咒
+function rollBuffCurseCards(n) {
   let pool = BUFF_POOL.slice();
   if (Game.debuffs.length === 0) pool = pool.filter(x => x.id !== 'purify');
   for (let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const tmp=pool[i]; pool[i]=pool[j]; pool[j]=tmp; }
-  const choices = pool.slice(0, 3);
+  const cards = [];
+  for (let i=0; i<n && i<pool.length; i++) {
+    const curse = DEBUFF_POOL[Math.floor(Math.random()*DEBUFF_POOL.length)];
+    cards.push({ buff: pool[i], curse });
+  }
+  return cards;
+}
+// v1.5:強化選擇彈窗 — count 張卡片(每張含 1 強化 + 1 詛咒),玩家擇一
+function showBuffChoice(count, titleText, subText) {
+  count = count || 3;
+  const cards = rollBuffCurseCards(count);
   const cont = document.getElementById('buff-cards');
   cont.innerHTML = '';
-  document.getElementById('buff-wave').textContent = Game.wave;
-  for (const b of choices) {
+  document.getElementById('buff-title').textContent = titleText || '★ 選擇強化 ★';
+  document.getElementById('buff-sub').textContent = subText
+    || `撐過第 ${Game.wave} 波 — ${count} 選 1 強化(每項都綁定一個詛咒)`;
+  for (const c of cards) {
     const card = document.createElement('div');
     card.className = 'buff-card';
-    card.innerHTML = `<div class="bc-cat">${b.cat}</div><div class="bc-name">${b.name}</div><div class="bc-desc">${b.desc}</div>`;
+    card.innerHTML = `<div class="bc-cat">${c.buff.cat}</div>`
+      + `<div class="bc-name">${c.buff.name}</div>`
+      + `<div class="bc-good">✦ 強化:${c.buff.desc}</div>`
+      + `<div class="bc-curse">☠ 詛咒:${c.curse.name} — ${c.curse.desc}</div>`;
     card.addEventListener('click', () => {
-      applyBuff(b.id);
+      applyBuff(c.buff.id);
+      applyCurse(c.curse.id);
       document.getElementById('buff-screen').style.display = 'none';
       Game.paused = false;
+      updateUI();
     });
     cont.appendChild(card);
   }
@@ -1137,6 +1188,9 @@ class Enemy {
     this.shieldAmt = 0;
     this.poisonDps = 0;     // 毒素塔造成的持續傷害
     this.poisonTimer = 0;
+    // v1.7:毒素塔額外的「百分比生命扣血」— 每次命中疊加一層(上限 5 層),每層 1% maxHP/s
+    this.poisonPctStacks = 0;
+    this.poisonPctTimer = 0;
   }
   isTargetable() {
     return !this.dead && !this.reachedEnd && !this.invisible;
@@ -1151,6 +1205,13 @@ class Enemy {
       this.poisonTimer -= dt;
       this.takeDamage(this.poisonDps * dt, 0, 0, true);
       if (this.poisonTimer <= 0) this.poisonDps = 0;
+      if (this.dead) return;
+    }
+    // v1.7 毒素百分比 DoT:每層 1% maxHP/s(真實傷害,無視防禦),最多 5 層
+    if (this.poisonPctTimer > 0 && this.poisonPctStacks > 0) {
+      this.poisonPctTimer -= dt;
+      this.takeDamage(this.maxHp * 0.01 * this.poisonPctStacks * dt, 0, 0, true);
+      if (this.poisonPctTimer <= 0) this.poisonPctStacks = 0;
       if (this.dead) return;
     }
     // v1.3 結界使減傷光環計時
@@ -2003,7 +2064,9 @@ class Tower {
       const dx = Math.cos(this.fireAngle), dy = Math.sin(this.fireAngle);
       const LINE_HALF = 20; // 直線寬度(垂直容忍距離)
       // v1.4:視線阻擋 — 直線被障礙物/友軍機甲擋住後,後方的敵人不列入目標
-      const reach = rayObstacleDist(this.x, this.y, dx, dy, s.range * Game.fx.towerRange);
+      // v1.6:軌道砲改為「會被友軍機甲擋下」(其他砲塔不受機甲阻擋)
+      // v1.7:被「所有友軍砲台」擋下(自己不會擋自己),前後對線時後座無法穿過前座
+      const reach = rayObstacleDist(this.x, this.y, dx, dy, s.range * Game.fx.towerRange, true, this);
       let bestHp = Infinity;
       for (const e of Game.enemies) {
         if (!e.isTargetable()) continue;
@@ -2066,6 +2129,7 @@ class Tower {
     Game.projectiles.push(new Projectile({
       x: this.x, y: this.y, vx: vx*projSpeed, vy: vy*projSpeed,
       kind: this.def.proj, dmg: s.dmg * this.dmgMult * Game.fx.towerDmg, target: enemy,
+      tx: enemy.x, ty: enemy.y,  // v1.5:電漿砲手雷的落點(目標當下位置)
       splash: s.splash || 0, slow: s.slow || 0, slowDur: s.slowDur || 0,
       pierce: s.pierce || 0, color: this.def.color,
       poison: s.poison || 0, poisonDur: s.poisonDur || 0
@@ -2340,10 +2404,35 @@ class Projectile {
     this.trail = [];
     // v1.3:記錄發射點,用於「離開發射處後才判定阻擋」
     this.ox = this.x; this.oy = this.y;
+    // v1.5:電漿砲 — 拋物線丟擲手雷,設定起點/落點/飛行時間
+    if (this.kind === 'plasma') {
+      this.sx = this.x; this.sy = this.y;
+      // tx,ty 由 shoot() 帶入(目標當下位置);萬一缺失就用速度向量推算落點
+      if (this.tx == null) { this.tx = this.x + (this.vx||0)*0.5; this.ty = this.y + (this.vy||0)*0.5; }
+      const fd = Math.hypot(this.tx - this.sx, this.ty - this.sy);
+      this.flightDur = Math.max(0.34, Math.min(0.9, fd / 360));
+      this.flightT = 0;
+      this.lobZ = 0;
+      this.life = this.flightDur + 0.2;
+    }
   }
   update(dt) {
     this.life -= dt;
     if (this.life <= 0) { this.dead = true; return; }
+
+    // v1.5:電漿砲 — 拋物線飛行,抵達落點後大範圍爆炸(飛越障礙物與友軍)
+    if (this.kind === 'plasma') {
+      this.flightT += dt;
+      const k = Math.min(1, this.flightT / this.flightDur);
+      this.x = this.sx + (this.tx - this.sx) * k;
+      this.y = this.sy + (this.ty - this.sy) * k;
+      this.lobZ = Math.sin(k * Math.PI) * (38 + this.flightDur * 60);
+      this.trail.push({x:this.x, y:this.y - this.lobZ});
+      if (this.trail.length > 8) this.trail.shift();
+      if (k >= 1) this.explodePlasma();
+      return;
+    }
+
     // store trail
     this.trail.push({x:this.x, y:this.y});
     if (this.trail.length>8) this.trail.shift();
@@ -2351,17 +2440,24 @@ class Projectile {
 
     if (this.x<-40||this.x>W+40||this.y<-40||this.y>H+40) { this.dead = true; return; }
 
-    // v1.3:子彈被地圖障礙物 / 友軍機甲擋下(離開發射點 22px 後才判定)
+    // v1.3:子彈被地圖障礙物擋下(離開發射點 22px 後才判定)
+    // v1.5:友軍機甲不再阻擋子彈 — 僅地圖障礙物會擋
+    // v1.6:軌道砲彈道恢復會被友軍機甲擋(其他砲塔仍只受障礙物影響)
+    // v1.7:軌道砲彈道改為被「所有友軍砲台」擋下(離發射點 22px 後判定,自己不會擋自己)
     if ((this.x-this.ox)*(this.x-this.ox) + (this.y-this.oy)*(this.y-this.oy) > 484) {
       const oc = Math.floor(this.x/TILE), or = Math.floor(this.y/TILE);
       if (obstacleTiles.has(oc + ',' + or)) {
         spawnParticles(this.x, this.y, '#8899aa', 5);
         this.dead = true; return;
       }
-      for (const t of Game.towers) {
-        if (t.isMech && !t.dead && dist(this, t) < 20) {
-          spawnParticles(this.x, this.y, '#ffaa00', 4);
-          this.dead = true; return;
+      if (this.kind === 'rail') {
+        for (const m of Game.towers) {
+          if (m.dead) continue;
+          const ddx = m.x - this.x, ddy = m.y - this.y;
+          if (ddx*ddx + ddy*ddy < 196) {  // 塔半徑 14
+            spawnParticles(this.x, this.y, '#ffaa00', 6);
+            this.dead = true; return;
+          }
         }
       }
     }
@@ -2375,20 +2471,7 @@ class Projectile {
         this.hitSet.add(e);
         AudioFX.hit();
 
-        if (this.kind === 'plasma') {
-          // splash
-          for (const e2 of Game.enemies) {
-            if (e2 === e || e2.dead || e2.reachedEnd) continue;
-            if (dist(this, e2) <= this.splash) {
-              const falloff = 1 - dist(this,e2)/this.splash * 0.5;
-              e2.takeDamage(this.dmg * falloff, 0, 0);
-            }
-          }
-          spawnParticles(this.x, this.y, this.color, 22);
-          AudioFX.explode();
-          this.dead = true;
-          return;
-        }
+        // v1.5:電漿砲已改為拋物線手雷(於 update 內提前處理爆炸),不再走此命中分支
         if (this.kind === 'cryo') {
           // v7: 冰凍 AOE - 範圍內所有敵人都受傷害並減速
           for (const e2 of Game.enemies) {
@@ -2415,6 +2498,9 @@ class Projectile {
           const cap = this.poison * 4;
           e.poisonDps = Math.min(e.poisonDps + this.poison, cap);
           e.poisonTimer = this.poisonDur;
+          // v1.7 額外疊加「百分比扣血」— 每次命中 +1 層,上限 5 層,每層 1% maxHP/s
+          e.poisonPctStacks = Math.min(5, (e.poisonPctStacks || 0) + 1);
+          e.poisonPctTimer = Math.max(e.poisonPctTimer || 0, this.poisonDur);
           spawnParticles(this.x, this.y, this.color, 7);
           this.dead = true;
           return;
@@ -2425,6 +2511,32 @@ class Projectile {
         return;
       }
     }
+  }
+  // v1.5:電漿砲手雷落地爆炸 — 大範圍 AOE(中心全傷,邊緣衰減至 55%)
+  // v1.7:爆炸範圍大幅提升 + 動畫升級(三層擴張衝擊環 + 中央白色閃光 + 更多粒子)
+  explodePlasma() {
+    if (this.dead) return;
+    const R = this.splash || 120;
+    for (const e of Game.enemies) {
+      if (e.dead || e.reachedEnd) continue;
+      const dd = dist(this, e);
+      if (dd <= R) {
+        const falloff = 1 - (dd / R) * 0.45;
+        e.takeDamage(this.dmg * falloff, 0, 0);
+      }
+    }
+    // v1.7:三層衝擊環 — 外圈最寬最慢、中圈本色、內圈白色快速擴張
+    Game.blasts.push({x:this.x, y:this.y, maxR:R*1.05, t:0, dur:0.65, color:this.color, ringStyle:'outer'});
+    Game.blasts.push({x:this.x, y:this.y, maxR:R*0.78, t:0, dur:0.48, color:this.color, ringStyle:'mid'});
+    Game.blasts.push({x:this.x, y:this.y, maxR:R*0.45, t:0, dur:0.28, color:'#ffffff', ringStyle:'inner'});
+    // v1.7:中央白光快閃(短暫填滿光暈)
+    Game.blasts.push({x:this.x, y:this.y, maxR:R*0.55, t:0, dur:0.18, color:'#ffffff', ringStyle:'flash'});
+    spawnParticles(this.x, this.y, this.color, 50);
+    spawnParticles(this.x, this.y, '#ffdd55', 28);
+    spawnParticles(this.x, this.y, '#ffffff', 18);
+    spawnParticles(this.x, this.y, '#ff66ff', 14);
+    AudioFX.explode();
+    this.dead = true;
   }
   draw(ctx) {
     // trail
@@ -2444,10 +2556,20 @@ class Projectile {
       ctx.fillStyle = '#fff';
       ctx.fillRect(this.x-1, this.y-1, 2, 2);
     } else if (this.kind === 'plasma') {
+      // v1.5:拋擲手雷 — 地面陰影 + 浮空彈體(高度 = lobZ)
+      const gz = this.lobZ || 0;
+      ctx.globalAlpha = 0.32;
+      ctx.fillStyle = '#000';
+      const sr = Math.max(2, 5 - gz*0.025);
+      ctx.beginPath(); ctx.ellipse(this.x, this.y, sr, Math.max(1, sr*0.5), 0, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+      const gy = this.y - gz;
       ctx.fillStyle = this.color;
-      ctx.beginPath(); ctx.arc(this.x,this.y,4,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(this.x, gy, 6, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#ffdd88';
+      ctx.beginPath(); ctx.arc(this.x, gy, 3.5, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(this.x,this.y,2,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(this.x-1.5, gy-1.5, 1.5, 0, Math.PI*2); ctx.fill();
     } else if (this.kind === 'cryo') {
       ctx.fillStyle = this.color;
       ctx.fillRect(this.x-2, this.y-2, 4, 4);
@@ -2804,6 +2926,58 @@ function drawParticles(ctx) {
   }
   ctx.globalAlpha = 1;
 }
+// v1.5:電漿砲手雷爆炸的擴張衝擊環
+function updateBlasts(dt) {
+  for (const b of Game.blasts) b.t += dt;
+  Game.blasts = Game.blasts.filter(b => b.t < b.dur);
+}
+function drawBlasts(ctx) {
+  // v1.7:多種環樣式分開繪製,呈現「手雷大爆炸」三層衝擊 + 中央閃光的觀感
+  for (const b of Game.blasts) {
+    const k = clamp(b.t / b.dur, 0, 1);
+    const r = b.maxR * k;
+    const fade = 1 - k;
+    const style = b.ringStyle || 'mid';
+    if (style === 'flash') {
+      // 中央白色閃光圓形(實心、快速淡出)
+      ctx.globalAlpha = fade * 0.85;
+      const grd = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.maxR);
+      grd.addColorStop(0, '#ffffff');
+      grd.addColorStop(0.4, b.color);
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.maxR*(0.5 + k*0.5), 0, Math.PI*2); ctx.fill();
+    } else if (style === 'outer') {
+      // 外圈最寬最亮 — 主要視覺衝擊
+      ctx.globalAlpha = fade * 0.9;
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
+      // 邊緣光暈(半透明粗線)
+      ctx.globalAlpha = fade * 0.35;
+      ctx.lineWidth = 14;
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
+    } else if (style === 'inner') {
+      // 內圈白色快速擴散
+      ctx.globalAlpha = fade * 0.95;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
+    } else {
+      // 中圈本色
+      ctx.globalAlpha = fade * 0.75;
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = fade * 0.4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(b.x, b.y, r*0.62, 0, Math.PI*2); ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 1;
+}
 
 // ---------------- Wave manager ----------------
 // v1.1:手工波(1-12)後段注入機制怪物,讓玩家在進入程序波前先見識新敵人
@@ -2855,8 +3029,7 @@ function buildProceduralWave(waveNum) {
 function startWave() {
   if (Game.waveActive || Game.ended) return;
   Game.wave++;
-  // v1.2 BOSS 波詛咒:第 10 波後每 5 波(BOSS 波)抽一個永久累積 debuff
-  if (Game.wave > 10 && Game.wave % 5 === 0) rollDebuff();
+  // v1.5:移除「每 5 波固定給詛咒」— 詛咒改為綁在每 5 波的強化卡上(showBuffChoice)
   // v1.1 無止盡:前 12 波用手工波(尾段注入機制怪),之後程序化生成
   let def;
   if (Game.wave <= WAVES.length) {
@@ -2937,8 +3110,10 @@ function updateWave(dt) {
     // v1.2:若開啟自動模式,設定下一波倒數
     if (Game.autoStart) Game.autoCountdown = AUTO_DELAY;
     updateUI();
-    // v1.3:每 5 波清除後,玩家 3 選 1 強化(會暫停遊戲彈出選擇)
-    if (Game.wave % 5 === 0 && !Game.ended) showBuffChoice();
+    // v1.3/v1.5:每 5 波清除後,玩家 3 選 1 強化(每張卡綁定一個詛咒)
+    if (Game.wave % 5 === 0 && !Game.ended) {
+      showBuffChoice(3, '★ 選擇強化 ★', `撐過第 ${Game.wave} 波 — 三選一強化(每項都綁定一個詛咒)`);
+    }
   }
 }
 
@@ -3087,8 +3262,10 @@ function drawBuildOverlay() {
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   if (Game.selected === 'rail') {
     // v8:軌道砲 — 直線方向預覽;v1.4:預覽線在障礙物 / 友軍機甲處中斷
+    // v1.6:預覽線在友軍機甲處也會中斷(與實際射擊判定一致)
+    // v1.7:預覽線在「所有已部署砲台」處也會中斷
     const dx = Math.cos(Game.placeDir), dy = Math.sin(Game.placeDir);
-    const reach = rayObstacleDist(cx, cy, dx, dy, 2000);
+    const reach = rayObstacleDist(cx, cy, dx, dy, 2000, true);
     const ex = cx + dx*reach, ey = cy + dy*reach;
     ctx.lineCap = 'round';
     // 直線範圍區
@@ -3151,8 +3328,10 @@ function drawSelectedRange() {
     const er = s.range * Game.fx.towerRange; // v1.2:含詛咒後的有效射程
     if (t.type === 'rail') {
       // v8:軌道砲 — 顯示直線攻擊範圍;v1.4:在障礙物 / 友軍機甲處中斷
+      // v1.6:已選軌道砲的視覺化線也會在友軍機甲處中斷
+      // v1.7:在「所有友軍砲台」處中斷(自己除外)
       const dx = Math.cos(t.fireAngle), dy = Math.sin(t.fireAngle);
-      const reach = rayObstacleDist(t.x, t.y, dx, dy, er);
+      const reach = rayObstacleDist(t.x, t.y, dx, dy, er, true, t);
       const ex = t.x + dx*reach, ey = t.y + dy*reach;
       ctx.lineCap = 'round';
       ctx.strokeStyle = t.def.color;
@@ -3180,19 +3359,27 @@ function drawSelectedRange() {
 }
 
 // ---------------- v1.1 指揮塔增益 ----------------
-// 每幀重算:範圍內非支援型砲台獲得傷害/射速加成(可多塔疊加,加法)
+// 每幀重算:範圍內非支援型砲台獲得傷害/射速加成
+// v1.1~v1.6:多座指揮塔加法疊加
+// v1.7:指揮塔「不再疊加」— 每座砲台只吃範圍內「最強的一座」指揮塔加成
 function applySupportBuffs() {
   for (const t of Game.towers) { t.dmgMult = 1; t.fireRateMult = 1; }
-  for (const sup of Game.towers) {
-    if (sup.dead || !sup.def.isSupport) continue;
-    if (sup.disabledTimer > 0 || sup.faulted) continue; // 被干擾/故障時增益失效
-    const s = sup.stats;
-    for (const t of Game.towers) {
-      if (t === sup || t.dead || t.def.isSupport) continue;
-      if (dist(sup, t) <= s.range * Game.fx.towerRange) {
-        t.dmgMult += s.dmgBonus;
-        t.fireRateMult += s.fireRateBonus;
+  for (const t of Game.towers) {
+    if (t.dead || t.def.isSupport) continue;
+    let bestSup = null;
+    let bestVal = -1;
+    for (const sup of Game.towers) {
+      if (sup === t || sup.dead || !sup.def.isSupport) continue;
+      if (sup.disabledTimer > 0 || sup.faulted) continue; // 被干擾/故障時增益失效
+      if (dist(sup, t) <= sup.stats.range * Game.fx.towerRange) {
+        // 以 (傷害加成 + 射速加成) 為強度判定,取最大的一座
+        const val = (sup.stats.dmgBonus || 0) + (sup.stats.fireRateBonus || 0);
+        if (val > bestVal) { bestVal = val; bestSup = sup; }
       }
+    }
+    if (bestSup) {
+      t.dmgMult += bestSup.stats.dmgBonus;
+      t.fireRateMult += bestSup.stats.fireRateBonus;
     }
   }
 }
@@ -3231,6 +3418,7 @@ function simulate(dt) {
   for (const ue of Game.upgradeEffects) ue.update(dt);
   for (const lt of Game.lightnings) lt.update(dt);
   updateParticles(dt);
+  updateBlasts(dt);
   updateFloatTexts(dt);
   // v1.1:處理延後生成佇列(分裂體分裂 / 召喚者召喚)
   if (Game.spawnLater.length) {
@@ -3256,6 +3444,7 @@ function render() {
   for (const p of Game.projectiles) p.draw(ctx);
   for (const lt of Game.lightnings) lt.draw(ctx);
   drawParticles(ctx);
+  drawBlasts(ctx);
   for (const ue of Game.upgradeEffects) ue.draw(ctx);
   drawFloatTexts(ctx);
   drawBuildOverlay();
@@ -3370,6 +3559,20 @@ function selectTower(type) {
   Game.selectedTower = null;
   updateTowerButtons();
   updateTowerInfo();
+  updateRotateBtn();
+}
+// v1.5:左側面板的軌道砲旋轉按鈕 — 選取軌道砲時顯示(手機無鍵盤亦可轉向)
+function updateRotateBtn() {
+  const row = document.getElementById('rotate-row');
+  if (!row) return;
+  if (Game.selected === 'rail') {
+    row.style.display = '';
+    const dirName = ['→ 右','↓ 下','← 左','↑ 上'][Math.round(Game.placeDir/(Math.PI/2))%4];
+    const btn = document.getElementById('rotate-dir-btn');
+    if (btn) btn.textContent = `🔄 軌道砲方向:${dirName}`;
+  } else {
+    row.style.display = 'none';
+  }
 }
 function updateTowerButtons() {
   document.querySelectorAll('.tower-btn').forEach(b => {
@@ -3401,6 +3604,12 @@ function updateUI() {
     buyBtn.disabled = Game.gold < SLOT_COST || Game.ended;
     buyBtn.textContent = `擴充部署位 +1(${SLOT_COST}⚡)`;
   }
+  // v1.5:購買強化按鈕(能源不足時禁用)
+  const bbBtn = document.getElementById('buybuff-btn');
+  if (bbBtn) {
+    bbBtn.disabled = Game.gold < BUFF_COST || Game.ended;
+    bbBtn.textContent = `購買強化 2選1(${BUFF_COST}⚡)`;
+  }
 }
 function updateTowerInfo() {
   const body = document.getElementById('tower-info-body');
@@ -3421,6 +3630,7 @@ function updateTowerInfo() {
       html += `<div class="tinfo-row"><span class="l">射速</span><span class="r">${(s.fireRate*t.fireRateMult).toFixed(1)}/秒${bTag}</span></div>`;
       if (s.chainCount) html += `<div class="tinfo-row"><span class="l">連鎖</span><span class="r">${s.chainCount+1} 目標</span></div>`;
       if (s.poison) html += `<div class="tinfo-row"><span class="l">毒性</span><span class="r">+${s.poison}/s × ${s.poisonDur}s</span></div>`;
+      if (t.type === 'poison') html += `<div class="tinfo-row"><span class="l">百分比</span><span class="r">+1%maxHP/s × 5層</span></div>`;
       if (s.splash) html += `<div class="tinfo-row"><span class="l">爆風</span><span class="r">${s.splash}</span></div>`;
       if (s.slow) html += `<div class="tinfo-row"><span class="l">減速</span><span class="r">${Math.floor(s.slow*100)}%</span></div>`;
       if (s.pierce) html += `<div class="tinfo-row"><span class="l">穿透</span><span class="r">${s.pierce}</span></div>`;
@@ -3463,6 +3673,7 @@ function updateTowerInfo() {
       h += `<div class="tinfo-row"><span class="l">射速</span><span class="r">${def.fireRate}/秒</span></div>`;
       if (def.chainCount) h += `<div class="tinfo-row"><span class="l">連鎖</span><span class="r">${def.chainCount+1} 目標</span></div>`;
       if (def.poison) h += `<div class="tinfo-row"><span class="l">毒性</span><span class="r">+${def.poison}/s × ${def.poisonDur}s</span></div>`;
+      if (Game.selected === 'poison') h += `<div class="tinfo-row"><span class="l">百分比</span><span class="r">+1%maxHP/s × 5層</span></div>`;
     }
     h += `<div style="margin-top:6px; color:#ffe600; font-size:10px;">點擊地圖${Game.selected==='mech'?'路徑':'空格'}部署</div>`;
     if (Game.selected === 'rail') {
@@ -3474,6 +3685,7 @@ function updateTowerInfo() {
     document.getElementById('rotate-btn')?.addEventListener('click', () => {
       Game.placeDir = (Game.placeDir + Math.PI/2) % (Math.PI*2);
       updateTowerInfo();
+      updateRotateBtn();
     });
   } else {
     body.innerHTML = '點選地圖上的塔查看資訊';
@@ -3497,6 +3709,7 @@ function handleCanvasTap(mx, my) {
         Game.selected = null;
         updateTowerButtons();
         updateTowerInfo();
+        updateRotateBtn();
       }
     }
     return;
@@ -3565,6 +3778,22 @@ document.getElementById('buyslot-btn').addEventListener('click', () => {
   log(`★ 購買部署位成功!部署上限 → ${MAX_TOWERS}`, 'e-good');
   updateUI();
 });
+// v1.5 額外購買強化(5000⚡)— 開啟 2 選 1 強化彈窗(每項都綁定一個詛咒)
+document.getElementById('buybuff-btn').addEventListener('click', () => {
+  if (Game.ended || Game.paused) return;
+  if (Game.gold < BUFF_COST) { log(`能源不足!購買強化需 ${BUFF_COST}⚡`, 'e-bad'); return; }
+  Game.gold -= BUFF_COST;
+  AudioFX.deploy();
+  log(`▼ 購買強化 −${BUFF_COST}⚡ — 二選一`, 'e-warn');
+  showBuffChoice(2, '★ 購買強化 ★', `已花費 ${BUFF_COST}⚡ — 二選一強化(每項都綁定一個詛咒)`);
+  updateUI();
+});
+// v1.5 左側面板旋轉按鈕(等同按 R,手機無鍵盤可用)
+document.getElementById('rotate-dir-btn').addEventListener('click', () => {
+  Game.placeDir = (Game.placeDir + Math.PI/2) % (Math.PI*2);
+  updateRotateBtn();
+  updateTowerInfo();
+});
 // 難度選擇器
 function buildDifficultySelector() {
   const grid = document.getElementById('diff-grid');
@@ -3615,11 +3844,13 @@ document.getElementById('mute-btn').addEventListener('click', () => {
 
 document.addEventListener('keydown', e => {
   if (e.key === ' ') { e.preventDefault(); if (!Game.waveActive) startWave(); }
-  else if (e.key === 'Escape') { Game.selected = null; Game.selectedTower = null; updateTowerButtons(); updateTowerInfo(); }
+  else if (e.key === 'Escape') { Game.selected = null; Game.selectedTower = null; updateTowerButtons(); updateTowerInfo(); updateRotateBtn(); }
   else if (e.key === 'r' || e.key === 'R') {
     // v8:選取軌道砲時按 R 旋轉部署方向
     if (Game.selected === 'rail') {
       Game.placeDir = (Game.placeDir + Math.PI/2) % (Math.PI*2);
+      updateRotateBtn();
+      updateTowerInfo();
     }
   }
   else if (e.key >= '1' && e.key <= '9') {
