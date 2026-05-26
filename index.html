@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>NEON DEFENSE v2.0 - 像素塔防(無止盡模式)</title>
+<title>NEON DEFENSE v2.2 - 像素塔防(無止盡模式)</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -220,67 +220,85 @@
     50%      { text-shadow: 0 0 32px #00ffe1, 0 0 60px #ff00ea; }
   }
   #title-screen .sub { color: #ff00ea; letter-spacing: 4px; margin-bottom: 32px; }
+  /* v2.2:標題畫面整體 UI 平順化 — 漸層背景、半透明邊框,減少突兀感 */
   #title-screen .controls {
     color: #d0e9ff;
     font-size: 13px;
     line-height: 1.8;
-    background: #0c1330;
-    border: 1px solid #00ffe1;
+    background: linear-gradient(180deg, rgba(12,19,48,0.92), rgba(8,12,32,0.92));
+    border: 1px solid rgba(0,255,225,0.35);
     padding: 18px 28px;
-    margin-bottom: 32px;
+    margin-bottom: 22px;
     max-width: 540px;
-    border-radius: 6px;
+    border-radius: 10px;
+    box-shadow: 0 0 16px rgba(0,255,225,0.15), inset 0 0 8px rgba(0,255,225,0.05);
   }
   #title-screen .controls span { color: #ffe600; }
   #title-screen button { font-size: 20px; padding: 14px 36px; }
 
+  /* v2.2:難度區塊 — 整體置中、與上方資訊區風格更一致 */
   #difficulty-section {
-    background: #0c1330;
-    border: 1px solid #ff00ea;
-    padding: 16px 24px;
-    margin-bottom: 24px;
-    border-radius: 6px;
-    box-shadow: 0 0 16px #ff00ea44;
+    background: linear-gradient(180deg, rgba(20,12,40,0.92), rgba(12,8,28,0.92));
+    border: 1px solid rgba(255,0,234,0.35);
+    padding: 18px 28px;
+    margin-bottom: 26px;
+    border-radius: 10px;
+    box-shadow: 0 0 16px rgba(255,0,234,0.18), inset 0 0 8px rgba(255,0,234,0.05);
+    width: min(540px, 92%);
+    text-align: center;
   }
   #difficulty-section h3 {
     color: #ff00ea;
     font-size: 14px;
     letter-spacing: 4px;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
     text-shadow: 0 0 8px #ff00ea88;
+    text-align: center;
   }
+  /* v2.2:4 顆難度按鈕 flex 置中 + 寬鬆間距 */
   .diff-grid {
-    display: grid;
-    grid-template-columns: repeat(10, 1fr);
-    gap: 4px;
-    margin-bottom: 8px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
   }
   .diff-btn {
-    background: #131a3d;
-    border: 1px solid #2a3870;
+    background: linear-gradient(180deg, #131a3d, #0a1028);
+    border: 2px solid #2a3870;
     color: #d0e9ff;
-    padding: 8px 0;
+    padding: 10px 22px;
     font-family: inherit;
     font-weight: bold;
     cursor: pointer;
-    font-size: 14px;
-    border-radius: 3px;
-    transition: all 0.15s;
+    font-size: 16px;
+    letter-spacing: 3px;
+    border-radius: 6px;
+    transition: all 0.18s ease;
+    min-width: 88px;
   }
-  .diff-btn:hover { background: #1c2660; border-color: #00ffe1; }
+  .diff-btn:hover {
+    background: linear-gradient(180deg, #1c2660, #131a3d);
+    border-color: #00ffe1;
+    transform: translateY(-2px);
+  }
+  /* v2.2:每個 tier 啟用後有獨特顏色提示(輕度→綠、中度→黃、重度→橘、印度→紅) */
   .diff-btn.active {
-    background: linear-gradient(180deg, #ff00ea, #aa00aa);
     color: #fff;
     border-color: #ffe600;
-    box-shadow: 0 0 12px #ff00ea;
-    transform: scale(1.1);
+    transform: translateY(-3px);
   }
+  .diff-btn[data-diff="1"].active { background: linear-gradient(180deg, #00cc66, #006633); box-shadow: 0 0 14px #00cc6688; }
+  .diff-btn[data-diff="2"].active { background: linear-gradient(180deg, #ffaa00, #cc7700); box-shadow: 0 0 14px #ffaa0088; }
+  .diff-btn[data-diff="3"].active { background: linear-gradient(180deg, #ff6633, #aa3311); box-shadow: 0 0 14px #ff663388; }
+  .diff-btn[data-diff="4"].active { background: linear-gradient(180deg, #ff0033, #880022); box-shadow: 0 0 14px #ff003388; }
   #diff-desc {
     color: #ffe600;
-    font-size: 12px;
+    font-size: 13px;
     text-align: center;
-    line-height: 1.5;
-    min-height: 36px;
+    line-height: 1.6;
+    min-height: 40px;
+    padding: 0 8px;
   }
   #diff-desc .multiplier { color: #ff4d6d; font-weight: bold; }
   #diff-desc .unlock { color: #00ffe1; }
@@ -347,9 +365,10 @@
     #title-screen .sub { letter-spacing: 2px; margin-bottom: 16px; }
     #title-screen .controls { font-size: 11px; padding: 12px 14px; line-height: 1.6; }
     #title-screen button { font-size: 16px; padding: 12px 28px; }
-    #difficulty-section { padding: 12px 10px; }
-    .diff-grid { gap: 3px; }
-    .diff-btn { font-size: 12px; padding: 6px 0; }
+    /* v2.2:行動裝置上 4 顆難度按鈕仍維持 flex 置中,字級稍微縮小 */
+    #difficulty-section { padding: 14px 12px; width: min(540px, 96%); }
+    .diff-grid { gap: 8px; }
+    .diff-btn { font-size: 13px; padding: 8px 14px; min-width: 70px; letter-spacing: 2px; }
     #buff-cards { flex-direction: column; gap: 10px; width: 100%; align-items: center; }
     .buff-card { width: 86vw; max-width: 340px; padding: 14px; }
     #buff-screen h2 { font-size: 26px; }
@@ -860,6 +879,7 @@ const TOWER_ORDER = ['laser','plasma','cryo','tesla','rail','mech','command','sn
 const STARTING_GOLD = 100;
 const WAVE_FIXED_BONUS = 100;
 let MAX_TOWERS = 8; // v1.4:初始 8(原 10);可被「擴充槽位」buff 或購買提升
+const MAX_TOWERS_CAP = 25; // v2.1:部署位最多擴充至 25 個
 const SLOT_COST = 3000;  // v1.4:購買 1 個部署位的能源花費(v1.8: 10000 → 3000)
 const BUFF_COST = 1000;  // v1.5:額外購買「2 選 1 強化」的能源花費(v1.8: 5000 → 1000)
 const GLOBAL_HP_MULT = 1; // v4:暫時還原 v2 血量倍率,測試經濟是否能通關
@@ -983,13 +1003,15 @@ const DEBUFF_POOL = [
 ];
 // v1.3:debuff 與 buff 的倍率合併計算進 Game.fx
 // v1.8:扣數值類詛咒倍率減半 — 0.88→0.94、0.90→0.95
+// v2.1:全部改為「加法疊加」— buff +12%/層、debuff −6% 傷害/射速、−5% 射程、敵速 +15%/層、敵血 +20%/層
+//      (例如 5 層傷害 buff = +60%,不再是 ×1.12^5 ≈ +76%)
 function recomputeFx() {
   const c = Game.debuffCounts, b = Game.buffCounts;
-  Game.fx.towerDmg   = Math.pow(0.94, c.dmg)   * Math.pow(1.12, b.tdmg);
-  Game.fx.towerRate  = Math.pow(0.94, c.rate)  * Math.pow(1.12, b.trate);
-  Game.fx.towerRange = Math.pow(0.95, c.range) * Math.pow(1.12, b.trange);
-  Game.fx.enemySpeed = Math.pow(1.15, c.espd);
-  Game.fx.enemyHp    = Math.pow(1.20, c.ehp);
+  Game.fx.towerDmg   = Math.max(0.1, 1 + 0.12 * b.tdmg   - 0.06 * c.dmg);
+  Game.fx.towerRate  = Math.max(0.1, 1 + 0.12 * b.trate  - 0.06 * c.rate);
+  Game.fx.towerRange = Math.max(0.1, 1 + 0.12 * b.trange - 0.05 * c.range);
+  Game.fx.enemySpeed = 1 + 0.15 * c.espd;
+  Game.fx.enemyHp    = 1 + 0.20 * c.ehp;
   Game.fx.enemyArmor = c.earm;
   Game.fx.fault      = c.fault;
 }
@@ -1023,7 +1045,7 @@ function applyBuff(id) {
   else if (id === 'trange')  Game.buffCounts.trange++;
   else if (id === 'maxlife'){ Game.maxLives += 6; Game.lives = Math.min(Game.maxLives, Game.lives + 6); }
   else if (id === 'heal')    Game.lives = Math.min(Game.maxLives, Game.lives + 14);
-  else if (id === 'slot')    MAX_TOWERS += 1;
+  else if (id === 'slot')    MAX_TOWERS = Math.min(MAX_TOWERS_CAP, MAX_TOWERS + 1);  // v2.1:上限 25
   else if (id === 'purify') {
     if (Game.debuffs.length) {
       const d = Game.debuffs.pop();
@@ -1087,18 +1109,15 @@ function showBuffChoice(count, titleText, subText) {
 }
 
 // 難度說明
+// v2.1:難度系統由 10 級簡化為 4 階 — 輕度/中度/重度/印度
+//   對應舊難度 1/3/6/10 的 HP 倍率(1.00 / 1.44 / 2.49 / 9.00)
+//   解鎖機制改為「該階累積解鎖」— 中度=盾兵,重度=盾兵+治療,印度=盾兵+治療+狂戰士+幻影
 const DIFFICULTY_INFO = [
   null,
-  { mult: 1.00, desc: '入門難度,基礎敵人', unlock: '' },
-  { mult: 1.20, desc: '稍難一點',           unlock: '' },
-  { mult: 1.44, desc: '解鎖 盾兵',         unlock: 'shield' },
-  { mult: 1.73, desc: '敵人更強悍',         unlock: '' },
-  { mult: 2.07, desc: '解鎖 治療單位',       unlock: 'healer' },
-  { mult: 2.49, desc: '需要嚴密布陣',       unlock: '' },
-  { mult: 2.99, desc: '解鎖 狂戰士',         unlock: 'berserker' },
-  { mult: 3.58, desc: '嚴峻挑戰',           unlock: '' },
-  { mult: 4.30, desc: '解鎖 幻影',           unlock: 'phantom' },
-  { mult: 9.00, desc: '★ 地獄難度 ★ 敵人血量 ×9,真正的試煉', unlock: '' }
+  { tier:'輕度', mult: 1.00, desc: '輕度 — 入門難度,基礎敵人', unlocks: [] },
+  { tier:'中度', mult: 1.44, desc: '中度 — 解鎖 盾兵',         unlocks: ['shield'] },
+  { tier:'重度', mult: 2.49, desc: '重度 — 解鎖 盾兵 + 治療單位,需要嚴密布陣', unlocks: ['shield','healer'] },
+  { tier:'印度', mult: 9.00, desc: '★ 印度難度 ★ 全部解鎖 + 血量 ×9,真正的試煉', unlocks: ['shield','healer','berserker','phantom'] }
 ];
 
 // 取得目前難度的 HP 倍率
@@ -1106,19 +1125,22 @@ function difficultyMult() {
   return DIFFICULTY_INFO[Game.difficulty].mult;
 }
 
-// 根據難度生成額外敵人波次
+// 根據難度生成額外敵人波次(v2.1:索引 2=中度、3=重度、4=印度)
 function getDifficultyExtras(waveNum, diff) {
   const extras = [];
-  if (diff >= 3 && waveNum >= 3) {
+  // 中度 (2) 起注入盾兵
+  if (diff >= 2 && waveNum >= 3) {
     extras.push({type:'shield', count: Math.min(5, Math.floor(waveNum/2)+1), interval: 1.4, delay: 3});
   }
-  if (diff >= 5 && waveNum >= 4) {
+  // 重度 (3) 起注入治療單位
+  if (diff >= 3 && waveNum >= 4) {
     extras.push({type:'healer', count: Math.min(3, Math.floor(waveNum/4)+1), interval: 2.0, delay: 5});
   }
-  if (diff >= 7 && waveNum >= 5) {
+  // 印度 (4) 起注入狂戰士 + 幻影
+  if (diff >= 4 && waveNum >= 5) {
     extras.push({type:'berserker', count: Math.min(6, Math.floor(waveNum/2)+1), interval: 1.0, delay: 4});
   }
-  if (diff >= 9 && waveNum >= 6) {
+  if (diff >= 4 && waveNum >= 6) {
     extras.push({type:'phantom', count: Math.min(5, Math.floor(waveNum/3)+1), interval: 1.6, delay: 7});
   }
   return extras;
@@ -2424,6 +2446,7 @@ class Projectile {
     if (this.life <= 0) { this.dead = true; return; }
 
     // v1.5:電漿砲 — 拋物線飛行,抵達落點後大範圍爆炸(飛越障礙物與友軍)
+    // v2.1:電漿砲飛行中若經過「非機甲」友軍砲台,提前在該處爆炸(友軍機甲視為例外可飛越)
     if (this.kind === 'plasma') {
       this.flightT += dt;
       const k = Math.min(1, this.flightT / this.flightDur);
@@ -2432,6 +2455,25 @@ class Projectile {
       this.lobZ = Math.sin(k * Math.PI) * (38 + this.flightDur * 60);
       this.trail.push({x:this.x, y:this.y - this.lobZ});
       if (this.trail.length > 8) this.trail.shift();
+      // v2.1:離開發射點 22px 後才判定阻擋,避免「剛離開砲塔就爆炸」;機甲為例外不擋
+      // v2.2:同時也會被地圖障礙物(隕石/殘骸/能量水晶)擋下提前爆炸
+      if ((this.x-this.ox)*(this.x-this.ox) + (this.y-this.oy)*(this.y-this.oy) > 484) {
+        // 障礙物 tile 檢查
+        const oc = Math.floor(this.x/TILE), or = Math.floor(this.y/TILE);
+        if (obstacleTiles.has(oc + ',' + or)) {
+          this.explodePlasma();
+          return;
+        }
+        // 非機甲友軍砲台檢查
+        for (const m of Game.towers) {
+          if (m.dead || m.isMech) continue;  // 機甲例外:可飛越
+          const ddx = m.x - this.x, ddy = m.y - this.y;
+          if (ddx*ddx + ddy*ddy < 196) {  // 半徑 14
+            this.explodePlasma();
+            return;
+          }
+        }
+      }
       if (k >= 1) this.explodePlasma();
       return;
     }
@@ -3090,7 +3132,8 @@ function startWave() {
   Game.spawnQueue = [];
   const dMult = difficultyMult();
   // v1.1/v1.2:波次血量倍率 — 第 10 波後成長明顯加速(每波 +15%)
-  const buff = (1 + (Game.wave-1)*0.05 + Math.max(0, Game.wave-10)*0.10) * dMult;
+  // v2.1:第 20 波後再加速,成長速度為原本的 3 倍(每波額外 +30% 在 W10 後的 +15% 之上)
+  const buff = (1 + (Game.wave-1)*0.05 + Math.max(0, Game.wave-10)*0.10 + Math.max(0, Game.wave-20)*0.30) * dMult;
   for (const grp of def) {
     const delay = grp.delay || 0;
     for (let i=0;i<grp.count;i++){
@@ -3635,7 +3678,7 @@ function updateTowerButtons() {
 function updateUI() {
   document.getElementById('ui-lives').textContent = Game.lives;
   document.getElementById('ui-gold').textContent = Game.gold;
-  document.getElementById('ui-difficulty').textContent = `${Game.difficulty} (x${DIFFICULTY_INFO[Game.difficulty].mult.toFixed(2)})`;
+  document.getElementById('ui-difficulty').textContent = `${DIFFICULTY_INFO[Game.difficulty].tier} (x${DIFFICULTY_INFO[Game.difficulty].mult.toFixed(2)})`;
   document.getElementById('ui-wave').textContent = `${Game.wave} ∞`;
   document.getElementById('ui-score').textContent = Game.score;
   const alive = Game.towers.filter(t=>!t.dead).length;
@@ -3650,10 +3693,12 @@ function updateUI() {
   startBtn.textContent = Game.waveActive ? '進行中…'
     : (next % 5 === 0 ? `BOSS波 (${next})` : `下一波 (${next})`);
   // v1.4:購買部署位按鈕(能源不足時禁用)
+  // v2.1:已達上限 25 時禁用並顯示「已達上限」
   const buyBtn = document.getElementById('buyslot-btn');
   if (buyBtn) {
-    buyBtn.disabled = Game.gold < SLOT_COST || Game.ended;
-    buyBtn.textContent = `擴充部署位 +1(${SLOT_COST}⚡)`;
+    const atCap = MAX_TOWERS >= MAX_TOWERS_CAP;
+    buyBtn.disabled = atCap || Game.gold < SLOT_COST || Game.ended;
+    buyBtn.textContent = atCap ? `部署位已達上限(${MAX_TOWERS_CAP})` : `擴充部署位 +1(${SLOT_COST}⚡)`;
   }
   // v1.5:購買強化按鈕(能源不足時禁用)
   const bbBtn = document.getElementById('buybuff-btn');
@@ -3829,8 +3874,9 @@ document.getElementById('auto-btn').addEventListener('click', () => {
   if (Game.autoStart && !Game.waveActive && !Game.ended) Game.autoCountdown = AUTO_DELAY;
   log(`自動開波:${Game.autoStart ? '開啟' : '關閉'}`, 'e-warn');
 });
-// v1.4 購買部署位(每個 10000⚡)
+// v1.4 購買部署位(每個 10000⚡;v1.8 改 3000⚡;v2.1 上限 25)
 document.getElementById('buyslot-btn').addEventListener('click', () => {
+  if (MAX_TOWERS >= MAX_TOWERS_CAP) { log(`部署位已達上限 ${MAX_TOWERS_CAP},無法再擴充`, 'e-bad'); return; }
   if (Game.gold < SLOT_COST) { log(`能源不足!擴充部署位需 ${SLOT_COST}⚡`, 'e-bad'); return; }
   Game.gold -= SLOT_COST;
   MAX_TOWERS += 1;
@@ -3854,15 +3900,15 @@ document.getElementById('rotate-dir-btn').addEventListener('click', () => {
   updateRotateBtn();
   updateTowerInfo();
 });
-// 難度選擇器
+// 難度選擇器 — v2.1:4 階(輕度/中度/重度/印度)
 function buildDifficultySelector() {
   const grid = document.getElementById('diff-grid');
   grid.innerHTML = '';
-  for (let i=1;i<=10;i++){
+  for (let i=1;i<=4;i++){
     const b = document.createElement('button');
     b.className = 'diff-btn';
     b.dataset.diff = i;
-    b.textContent = i;
+    b.textContent = DIFFICULTY_INFO[i].tier;
     if (i === Game.difficulty) b.classList.add('active');
     b.addEventListener('click', () => setDifficulty(i));
     grid.appendChild(b);
@@ -3879,21 +3925,17 @@ function setDifficulty(d) {
 function updateDifficultyDesc() {
   const info = DIFFICULTY_INFO[Game.difficulty];
   const mult = info.mult;
-  const unlocks = [];
-  for (let i=1;i<=Game.difficulty;i++){
-    const u = DIFFICULTY_INFO[i].unlock;
-    if (u) unlocks.push(ENEMY_DEFS[u].name);
-  }
-  let html = `難度 ${Game.difficulty}/10 — 敵人血量 <span class="multiplier">x${mult.toFixed(2)}</span>`;
+  const unlocks = (info.unlocks || []).map(u => ENEMY_DEFS[u].name);
+  let html = `難度 <strong>${info.tier}</strong> — 敵人血量 <span class="multiplier">x${mult.toFixed(2)}</span>`;
   html += `<br>${info.desc}`;
-  if (unlocks.length) html += ` <span class="unlock">[已解鎖: ${unlocks.join('、')}]</span>`;
+  if (unlocks.length) html += ` <span class="unlock">[解鎖: ${unlocks.join('、')}]</span>`;
   document.getElementById('diff-desc').innerHTML = html;
 }
 
 document.getElementById('play-btn').addEventListener('click', () => {
   document.getElementById('title-screen').style.display = 'none';
   AudioFX.waveStart();
-  log(`系統啟動,準備迎戰 (難度 ${Game.difficulty})`, 'e-good');
+  log(`系統啟動,準備迎戰 (難度 ${DIFFICULTY_INFO[Game.difficulty].tier})`, 'e-good');
 });
 document.getElementById('restart-btn').addEventListener('click', () => location.reload());
 document.getElementById('mute-btn').addEventListener('click', () => {
