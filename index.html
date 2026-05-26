@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>NEON DEFENSE v1.7 - 像素塔防(無止盡模式)</title>
+<title>NEON DEFENSE v2.0 - 像素塔防(無止盡模式)</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -382,10 +382,10 @@
         <button class="action" id="auto-btn">自動:關</button>
       </div>
       <div class="btn-row">
-        <button class="action" id="buyslot-btn">擴充部署位 +1(10000⚡)</button>
+        <button class="action" id="buyslot-btn">擴充部署位 +1(3000⚡)</button>
       </div>
       <div class="btn-row">
-        <button class="action" id="buybuff-btn">購買強化 2選1(5000⚡)</button>
+        <button class="action" id="buybuff-btn">購買強化 2選1(1000⚡)</button>
       </div>
       <div class="btn-row" id="rotate-row" style="display:none;">
         <button class="action selected" id="rotate-dir-btn">🔄 軌道砲方向:→ 右</button>
@@ -419,7 +419,7 @@
     <div><span>►</span> <span>無止盡模式</span>:波次無上限,每波越來越強,撐越久分數越高</div>
     <div><span>►</span> 每 <span>5 波</span> 出現 Boss,敵人血量/防禦隨波次持續成長</div>
     <div><span>►</span> 每 <span>5 波</span> 三選一 <span>強化</span> — 每項強化都<span>綁定一個詛咒</span></div>
-    <div><span>►</span> 也可花 <span>5000⚡</span> 隨時購買 <span>二選一</span> 強化(同樣綁詛咒)</div>
+    <div><span>►</span> 也可花 <span>1000⚡</span> 隨時購買 <span>二選一</span> 強化(同樣綁詛咒)</div>
     <div><span>►</span> 難度越高敵人越強,並解鎖 <span>盾兵/治療/狂戰士/幻影</span> 等敵人</div>
     <div><span>►</span> 後段波次會出現 <span>分裂體/召喚者/再生者/干擾者</span> 等特殊敵人</div>
     <div><span>►</span> 軌道砲是 <span>直線攻擊</span>,選取後按 <span>R</span> 鍵或畫面 <span>旋轉按鈕</span> 轉向(會被 <span>友軍機甲</span> 擋線)</div>
@@ -775,11 +775,12 @@ const TOWER_DEFS = {
     // v5: splash×2, fireRate×1.5
     // v1.5: 改為「拋擲手雷」— 射程與爆炸範圍大幅提升,彈道改為拋物線
     // v1.7: 爆炸範圍再大幅提升 165/215/270 → 230/305/400;爆炸動畫多層衝擊環 + 中央閃光
-    name: '電漿砲', desc:'拋擲手雷 超大範圍爆炸', cost: 120,
-    range: 170, dmg: 22, fireRate: 1.8, splash: 230, color:'#ff00ea', proj:'plasma',
+    // v2.0: 爆炸範圍 ÷3(230/305/400 → 77/102/133)、傷害 ×1.2(22/42/75 → 26/50/90);動畫極簡化
+    name: '電漿砲', desc:'拋擲手雷 集中爆炸', cost: 120,
+    range: 170, dmg: 26, fireRate: 1.8, splash: 77, color:'#ff00ea', proj:'plasma',
     upgrades:[
-      {cost:100, range:195, dmg:42, fireRate:2.4, splash:305},
-      {cost:160, range:225, dmg:75, fireRate:3.0, splash:400}
+      {cost:100, range:195, dmg:50, fireRate:2.4, splash:102},
+      {cost:160, range:225, dmg:90, fireRate:3.0, splash:133}
     ]
   },
   cryo: {
@@ -859,8 +860,8 @@ const TOWER_ORDER = ['laser','plasma','cryo','tesla','rail','mech','command','sn
 const STARTING_GOLD = 100;
 const WAVE_FIXED_BONUS = 100;
 let MAX_TOWERS = 8; // v1.4:初始 8(原 10);可被「擴充槽位」buff 或購買提升
-const SLOT_COST = 10000; // v1.4:購買 1 個部署位的能源花費
-const BUFF_COST = 5000;  // v1.5:額外購買「2 選 1 強化」的能源花費
+const SLOT_COST = 3000;  // v1.4:購買 1 個部署位的能源花費(v1.8: 10000 → 3000)
+const BUFF_COST = 1000;  // v1.5:額外購買「2 選 1 強化」的能源花費(v1.8: 5000 → 1000)
 const GLOBAL_HP_MULT = 1; // v4:暫時還原 v2 血量倍率,測試經濟是否能通關
 
 const ENEMY_DEFS = {
@@ -938,6 +939,7 @@ const Game = {
   particles: [],
   upgradeEffects: [], // 升級華麗動畫
   lightnings: [],     // v1.1: 鏈電塔閃電效果
+  teslaChains: [],    // v1.8: 鏈電塔連鎖跳躍佇列(每跳停頓 0.1s)
   blasts: [],         // v1.5: 電漿砲手雷爆炸衝擊環
   floatTexts: [],     // v6: 浮動文字(+X⚡ 等)
   spawnQueue: [], // {type, t}
@@ -969,21 +971,23 @@ const Game = {
 const AUTO_DELAY = 4; // 自動開波倒數秒數
 
 // v1.2 詛咒池 — v1.5:不再每 5 波固定發放,改為綁定在每張「強化卡」上一起套用
+// v1.8:扣數值類的詛咒嚴重度減半 — 傷害/射速 −12%→−6%、射程 −10%→−5%(敵人強化類維持不變)
 const DEBUFF_POOL = [
-  { id:'dmg',   name:'武器衰變', desc:'全砲台傷害 −12%' },
-  { id:'rate',  name:'迴路過熱', desc:'全砲台射速 −12%' },
-  { id:'range', name:'感測干擾', desc:'全砲台射程 −10%' },
+  { id:'dmg',   name:'武器衰變', desc:'全砲台傷害 −6%' },
+  { id:'rate',  name:'迴路過熱', desc:'全砲台射速 −6%' },
+  { id:'range', name:'感測干擾', desc:'全砲台射程 −5%' },
   { id:'espd',  name:'狂暴訊號', desc:'敵人速度 +15%' },
   { id:'ehp',   name:'裝甲強化', desc:'敵人血量 +20%' },
   { id:'earm',  name:'力場護盾', desc:'敵人防禦 +1' },
   { id:'fault', name:'系統故障', desc:'每波隨機 1 座砲台整波當機' }
 ];
 // v1.3:debuff 與 buff 的倍率合併計算進 Game.fx
+// v1.8:扣數值類詛咒倍率減半 — 0.88→0.94、0.90→0.95
 function recomputeFx() {
   const c = Game.debuffCounts, b = Game.buffCounts;
-  Game.fx.towerDmg   = Math.pow(0.88, c.dmg)   * Math.pow(1.12, b.tdmg);
-  Game.fx.towerRate  = Math.pow(0.88, c.rate)  * Math.pow(1.12, b.trate);
-  Game.fx.towerRange = Math.pow(0.90, c.range) * Math.pow(1.12, b.trange);
+  Game.fx.towerDmg   = Math.pow(0.94, c.dmg)   * Math.pow(1.12, b.tdmg);
+  Game.fx.towerRate  = Math.pow(0.94, c.rate)  * Math.pow(1.12, b.trate);
+  Game.fx.towerRange = Math.pow(0.95, c.range) * Math.pow(1.12, b.trange);
   Game.fx.enemySpeed = Math.pow(1.15, c.espd);
   Game.fx.enemyHp    = Math.pow(1.20, c.ehp);
   Game.fx.enemyArmor = c.earm;
@@ -1191,6 +1195,8 @@ class Enemy {
     // v1.7:毒素塔額外的「百分比生命扣血」— 每次命中疊加一層(上限 5 層),每層 1% maxHP/s
     this.poisonPctStacks = 0;
     this.poisonPctTimer = 0;
+    // v1.9:鏈電塔命中時的「暫停移動」計時器(秒);> 0 時跳過位置更新
+    this.stunTimer = 0;
   }
   isTargetable() {
     return !this.dead && !this.reachedEnd && !this.invisible;
@@ -1351,6 +1357,13 @@ class Enemy {
           this.blockedBy = null;
         }
       }
+      return;
+    }
+
+    // v1.9:鏈電塔命中時暫停移動 0.1 秒(stunTimer 由 takeDamage 設定)
+    if (this.stunTimer > 0) {
+      this.stunTimer -= dt;
+      this.t += dt;  // 動畫計時仍前進,只是不位移
       return;
     }
 
@@ -2144,33 +2157,23 @@ class Tower {
     else AudioFX.laser();
   }
   // v1.1 鏈電塔:閃電從目標連鎖跳躍到附近敵人,傷害逐跳衰減
+  // v1.8:每跳之間停頓 0.1 秒 — 第一段立即命中,之後每跳排入 Game.teslaChains 由 updateTeslaChains() 依時間推進
   teslaStrike(firstTarget) {
     const s = this.stats;
-    const CHAIN_RANGE = 86;     // 跳躍最大距離
-    const FALLOFF = 0.70;       // 每跳傷害衰減
+    const dmg = s.dmg * this.dmgMult * Game.fx.towerDmg;
     const maxJumps = s.chainCount || 3;
-    const hit = new Set();
-    const points = [{x:this.x, y:this.y}];
-    let cur = firstTarget;
-    let dmg = s.dmg * this.dmgMult * Game.fx.towerDmg;
-    let jumps = 0;
-    while (cur && jumps <= maxJumps) {
-      cur.takeDamage(dmg, 0, 0);
-      hit.add(cur);
-      points.push({x:cur.x, y:cur.y});
-      spawnParticles(cur.x, cur.y, this.def.color, 5);
-      let next = null, nd = CHAIN_RANGE;
-      for (const e of Game.enemies) {
-        if (!e.isTargetable() || hit.has(e)) continue;
-        const d = dist(cur, e);
-        if (d < nd) { nd = d; next = e; }
-      }
-      cur = next;
-      dmg *= FALLOFF;
-      jumps++;
-    }
+    // 排入一條鏈電佇列;第一段在 0 延遲後就會被 updateTeslaChains 處理
+    Game.teslaChains.push({
+      from: {x: this.x, y: this.y},
+      cur: firstTarget,
+      dmg: dmg,
+      jumps: 0,
+      maxJumps: maxJumps,
+      hit: new Set(),
+      color: this.def.color,
+      delay: 0   // 立即發第一段
+    });
     this.shotFlash = 1;
-    Game.lightnings.push(new Lightning(points, this.def.color));
     AudioFX.tesla();
   }
   draw(ctx) {
@@ -2501,7 +2504,22 @@ class Projectile {
           // v1.7 額外疊加「百分比扣血」— 每次命中 +1 層,上限 5 層,每層 1% maxHP/s
           e.poisonPctStacks = Math.min(5, (e.poisonPctStacks || 0) + 1);
           e.poisonPctTimer = Math.max(e.poisonPctTimer || 0, this.poisonDur);
-          spawnParticles(this.x, this.y, this.color, 7);
+          // v1.9:毒素塔新增 1.5 格(60px)範圍 — 直擊瞬間傷害 + 同樣的毒素疊加都會擴散到周圍敵人
+          const PSPLASH = 60;
+          for (const e2 of Game.enemies) {
+            if (e2 === e || !e2.isTargetable()) continue;
+            if (dist(this, e2) <= PSPLASH) {
+              e2.takeDamage(this.dmg, 0, 0);  // 直擊傷害(同主目標)
+              e2.poisonDps = Math.min(e2.poisonDps + this.poison, cap);
+              e2.poisonTimer = this.poisonDur;
+              e2.poisonPctStacks = Math.min(5, (e2.poisonPctStacks || 0) + 1);
+              e2.poisonPctTimer = Math.max(e2.poisonPctTimer || 0, this.poisonDur);
+            }
+          }
+          // 視覺化範圍:衝擊環 + 毒霧粒子
+          Game.blasts.push({x:this.x, y:this.y, maxR:PSPLASH, t:0, dur:0.32, color:this.color, ringStyle:'aoe'});
+          Game.blasts.push({x:this.x, y:this.y, maxR:PSPLASH, t:0, dur:0.4, color:this.color, ringStyle:'ring'});
+          spawnParticles(this.x, this.y, this.color, 14);
           this.dead = true;
           return;
         }
@@ -2514,6 +2532,9 @@ class Projectile {
   }
   // v1.5:電漿砲手雷落地爆炸 — 大範圍 AOE(中心全傷,邊緣衰減至 55%)
   // v1.7:爆炸範圍大幅提升 + 動畫升級(三層擴張衝擊環 + 中央白色閃光 + 更多粒子)
+  // v1.8:簡化動畫 — 移除中央閃光 + 內圈白環,只留「擴張到滿範圍的主環」+「半透明 AOE 填充」,
+  // v2.0:極簡化動畫 — 只在傷害範圍處畫「一個靜態淡出的圓圈輪廓」,不擴張、不閃爍,
+  //      3 倍速下也不刺眼;傷害範圍邊界仍然清楚可見。爆炸範圍 ÷3、傷害 ×1.2
   explodePlasma() {
     if (this.dead) return;
     const R = this.splash || 120;
@@ -2525,16 +2546,10 @@ class Projectile {
         e.takeDamage(this.dmg * falloff, 0, 0);
       }
     }
-    // v1.7:三層衝擊環 — 外圈最寬最慢、中圈本色、內圈白色快速擴張
-    Game.blasts.push({x:this.x, y:this.y, maxR:R*1.05, t:0, dur:0.65, color:this.color, ringStyle:'outer'});
-    Game.blasts.push({x:this.x, y:this.y, maxR:R*0.78, t:0, dur:0.48, color:this.color, ringStyle:'mid'});
-    Game.blasts.push({x:this.x, y:this.y, maxR:R*0.45, t:0, dur:0.28, color:'#ffffff', ringStyle:'inner'});
-    // v1.7:中央白光快閃(短暫填滿光暈)
-    Game.blasts.push({x:this.x, y:this.y, maxR:R*0.55, t:0, dur:0.18, color:'#ffffff', ringStyle:'flash'});
-    spawnParticles(this.x, this.y, this.color, 50);
-    spawnParticles(this.x, this.y, '#ffdd55', 28);
-    spawnParticles(this.x, this.y, '#ffffff', 18);
-    spawnParticles(this.x, this.y, '#ff66ff', 14);
+    // v2.0:一個 blast 條目 — 'static'(靜態圓圈輪廓,固定半徑 R,淡出)。極簡、不傷眼
+    Game.blasts.push({x:this.x, y:this.y, maxR:R, t:0, dur:0.28, color:this.color, ringStyle:'static'});
+    // 粒子由 20 顆降為 6 顆,只保留爆炸感
+    spawnParticles(this.x, this.y, this.color, 6);
     AudioFX.explode();
     this.dead = true;
   }
@@ -2931,48 +2946,83 @@ function updateBlasts(dt) {
   for (const b of Game.blasts) b.t += dt;
   Game.blasts = Game.blasts.filter(b => b.t < b.dur);
 }
+// v1.8:鏈電塔連鎖跳躍佇列 — 每跳停頓 0.1s,讓玩家看到一段一段跳的觀感
+const TESLA_JUMP_DELAY = 0.1;
+const TESLA_CHAIN_RANGE = 86;
+const TESLA_FALLOFF = 0.70;
+function updateTeslaChains(dt) {
+  for (let i = Game.teslaChains.length - 1; i >= 0; i--) {
+    const c = Game.teslaChains[i];
+    c.delay -= dt;
+    if (c.delay > 0) continue;
+    // 處理一次跳躍
+    if (!c.cur || !c.cur.isTargetable() || c.jumps > c.maxJumps) {
+      Game.teslaChains.splice(i, 1);
+      continue;
+    }
+    // 命中當前目標
+    c.cur.takeDamage(c.dmg, 0, 0);
+    // v1.9:鏈電塔命中時讓敵人暫停移動 0.1 秒(累加式 — 多次命中可延長停頓)
+    c.cur.stunTimer = Math.max(c.cur.stunTimer || 0, 0.1);
+    c.hit.add(c.cur);
+    spawnParticles(c.cur.x, c.cur.y, c.color, 5);
+    // 從 from→cur 畫出一段閃電(每段獨立 Lightning,視覺上一段段跳出來)
+    Game.lightnings.push(new Lightning([{x:c.from.x, y:c.from.y}, {x:c.cur.x, y:c.cur.y}], c.color));
+    // 找下一個目標
+    let next = null, nd = TESLA_CHAIN_RANGE;
+    for (const e of Game.enemies) {
+      if (!e.isTargetable() || c.hit.has(e)) continue;
+      const d = dist(c.cur, e);
+      if (d < nd) { nd = d; next = e; }
+    }
+    c.from = {x: c.cur.x, y: c.cur.y};
+    c.cur = next;
+    c.dmg *= TESLA_FALLOFF;
+    c.jumps++;
+    if (!next || c.jumps > c.maxJumps) {
+      // 結束本條連鎖
+      Game.teslaChains.splice(i, 1);
+    } else {
+      c.delay = TESLA_JUMP_DELAY;  // 下一跳 0.1s 後處理
+    }
+  }
+}
 function drawBlasts(ctx) {
-  // v1.7:多種環樣式分開繪製,呈現「手雷大爆炸」三層衝擊 + 中央閃光的觀感
+  // v1.8:簡化為兩種樣式 — 'ring'(擴張主環,顯示傷害範圍邊界) + 'aoe'(半透明填充圓,
+  //      直接顯示傷害區域)。在 3 倍速下也清晰且不刺眼。其他舊樣式保留 fallback 以避免遺漏條目
+  // v2.0:新增 'static' — 靜態圓圈輪廓,固定半徑,直接淡出(電漿砲專用,動畫極簡)
   for (const b of Game.blasts) {
     const k = clamp(b.t / b.dur, 0, 1);
-    const r = b.maxR * k;
     const fade = 1 - k;
-    const style = b.ringStyle || 'mid';
-    if (style === 'flash') {
-      // 中央白色閃光圓形(實心、快速淡出)
-      ctx.globalAlpha = fade * 0.85;
-      const grd = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.maxR);
-      grd.addColorStop(0, '#ffffff');
-      grd.addColorStop(0.4, b.color);
-      grd.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = grd;
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.maxR*(0.5 + k*0.5), 0, Math.PI*2); ctx.fill();
-    } else if (style === 'outer') {
-      // 外圈最寬最亮 — 主要視覺衝擊
-      ctx.globalAlpha = fade * 0.9;
+    const style = b.ringStyle || 'ring';
+    if (style === 'static') {
+      // 靜態輪廓圓 — 不擴張、無填充閃光,只是一個淡出的圓圈邊界
+      ctx.globalAlpha = fade * 0.7;
       ctx.strokeStyle = b.color;
-      ctx.lineWidth = 6;
-      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
-      // 邊緣光暈(半透明粗線)
-      ctx.globalAlpha = fade * 0.35;
-      ctx.lineWidth = 14;
-      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
-    } else if (style === 'inner') {
-      // 內圈白色快速擴散
-      ctx.globalAlpha = fade * 0.95;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
-    } else {
-      // 中圈本色
-      ctx.globalAlpha = fade * 0.75;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.maxR, 0, Math.PI*2); ctx.stroke();
+    } else if (style === 'aoe') {
+      // 半透明填充圓 — 不擴張、不閃,從 0.32 → 0 淡出,完整呈現傷害範圍
+      ctx.globalAlpha = fade * 0.32;
+      ctx.fillStyle = b.color;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.maxR, 0, Math.PI*2); ctx.fill();
+    } else if (style === 'ring') {
+      // 主衝擊環 — 從 0 擴張到 maxR,帶柔和外緣光暈
+      const r = b.maxR * k;
+      ctx.globalAlpha = fade * 0.85;
       ctx.strokeStyle = b.color;
       ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
-      ctx.globalAlpha = fade * 0.4;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(b.x, b.y, r*0.62, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = fade * 0.25;
+      ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
+    } else {
+      // 舊樣式相容繪製(若仍有遺漏的舊 blast 條目)
+      const r = b.maxR * k;
+      ctx.globalAlpha = fade * 0.65;
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
     }
   }
   ctx.globalAlpha = 1;
@@ -3419,6 +3469,7 @@ function simulate(dt) {
   for (const lt of Game.lightnings) lt.update(dt);
   updateParticles(dt);
   updateBlasts(dt);
+  updateTeslaChains(dt);  // v1.8:處理鏈電塔每跳 0.1s 的延遲連鎖
   updateFloatTexts(dt);
   // v1.1:處理延後生成佇列(分裂體分裂 / 召喚者召喚)
   if (Game.spawnLater.length) {
@@ -3620,9 +3671,10 @@ function updateTowerInfo() {
     html += `<div class="tinfo-row"><span class="l">射程</span><span class="r">${Math.floor(s.range)}</span></div>`;
     if (t.def.isSupport) {
       // v1.1 指揮塔:顯示增益數值
-      html += `<div class="tinfo-row"><span class="l">傷害增益</span><span class="r">+${Math.round(s.dmgBonus*100)}%</span></div>`;
-      html += `<div class="tinfo-row"><span class="l">射速增益</span><span class="r">+${Math.round(s.fireRateBonus*100)}%</span></div>`;
-      html += `<div style="font-size:9px;color:#99aabb;margin-top:3px;">範圍內砲台自動獲得增益,可多塔疊加</div>`;
+      // v1.8:指揮塔不疊加,在欄位內加上明確標記
+      html += `<div class="tinfo-row"><span class="l">傷害增益</span><span class="r">+${Math.round(s.dmgBonus*100)}% <span style="color:#ff8888">(不疊加)</span></span></div>`;
+      html += `<div class="tinfo-row"><span class="l">射速增益</span><span class="r">+${Math.round(s.fireRateBonus*100)}% <span style="color:#ff8888">(不疊加)</span></span></div>`;
+      html += `<div style="font-size:9px;color:#ff8888;margin-top:3px;">⚠ v1.8:多座指揮塔不再疊加;每座砲台只吃範圍內最強的一座</div>`;
     } else {
       const buffed = t.dmgMult > 1 || t.fireRateMult > 1;
       const bTag = buffed ? ' <span style="color:#ffb84d">▲</span>' : '';
@@ -3630,7 +3682,10 @@ function updateTowerInfo() {
       html += `<div class="tinfo-row"><span class="l">射速</span><span class="r">${(s.fireRate*t.fireRateMult).toFixed(1)}/秒${bTag}</span></div>`;
       if (s.chainCount) html += `<div class="tinfo-row"><span class="l">連鎖</span><span class="r">${s.chainCount+1} 目標</span></div>`;
       if (s.poison) html += `<div class="tinfo-row"><span class="l">毒性</span><span class="r">+${s.poison}/s × ${s.poisonDur}s</span></div>`;
-      if (t.type === 'poison') html += `<div class="tinfo-row"><span class="l">百分比</span><span class="r">+1%maxHP/s × 5層</span></div>`;
+      if (t.type === 'poison') {
+        html += `<div class="tinfo-row"><span class="l">百分比</span><span class="r">+1%maxHP/s × 5層</span></div>`;
+        html += `<div class="tinfo-row"><span class="l">範圍</span><span class="r">60(半徑1.5格)</span></div>`;
+      }
       if (s.splash) html += `<div class="tinfo-row"><span class="l">爆風</span><span class="r">${s.splash}</span></div>`;
       if (s.slow) html += `<div class="tinfo-row"><span class="l">減速</span><span class="r">${Math.floor(s.slow*100)}%</span></div>`;
       if (s.pierce) html += `<div class="tinfo-row"><span class="l">穿透</span><span class="r">${s.pierce}</span></div>`;
@@ -3666,14 +3721,19 @@ function updateTowerInfo() {
       <div class="tinfo-row"><span class="l">花費</span><span class="r">${def.cost}⚡</span></div>
       <div class="tinfo-row"><span class="l">射程</span><span class="r">${def.range}</span></div>`;
     if (def.isSupport) {
-      h += `<div class="tinfo-row"><span class="l">傷害增益</span><span class="r">+${Math.round(def.dmgBonus*100)}%</span></div>`;
-      h += `<div class="tinfo-row"><span class="l">射速增益</span><span class="r">+${Math.round(def.fireRateBonus*100)}%</span></div>`;
+      // v1.8:標註不疊加
+      h += `<div class="tinfo-row"><span class="l">傷害增益</span><span class="r">+${Math.round(def.dmgBonus*100)}% <span style="color:#ff8888">(不疊加)</span></span></div>`;
+      h += `<div class="tinfo-row"><span class="l">射速增益</span><span class="r">+${Math.round(def.fireRateBonus*100)}% <span style="color:#ff8888">(不疊加)</span></span></div>`;
+      h += `<div style="font-size:9px;color:#ff8888;margin-top:3px;">⚠ 多座指揮塔不疊加,只取範圍內最強一座</div>`;
     } else {
       h += `<div class="tinfo-row"><span class="l">傷害</span><span class="r">${def.dmg}</span></div>`;
       h += `<div class="tinfo-row"><span class="l">射速</span><span class="r">${def.fireRate}/秒</span></div>`;
       if (def.chainCount) h += `<div class="tinfo-row"><span class="l">連鎖</span><span class="r">${def.chainCount+1} 目標</span></div>`;
       if (def.poison) h += `<div class="tinfo-row"><span class="l">毒性</span><span class="r">+${def.poison}/s × ${def.poisonDur}s</span></div>`;
-      if (Game.selected === 'poison') h += `<div class="tinfo-row"><span class="l">百分比</span><span class="r">+1%maxHP/s × 5層</span></div>`;
+      if (Game.selected === 'poison') {
+        h += `<div class="tinfo-row"><span class="l">百分比</span><span class="r">+1%maxHP/s × 5層</span></div>`;
+        h += `<div class="tinfo-row"><span class="l">範圍</span><span class="r">60(半徑1.5格)</span></div>`;
+      }
     }
     h += `<div style="margin-top:6px; color:#ffe600; font-size:10px;">點擊地圖${Game.selected==='mech'?'路徑':'空格'}部署</div>`;
     if (Game.selected === 'rail') {
