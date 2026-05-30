@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>NEON DEFENSE v2.3 - 像素塔防(無止盡模式)</title>
+<title>NEON DEFENSE v2.5 - 像素塔防(無止盡模式)</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -81,6 +81,17 @@
     max-height: 296px;
     overflow-y: auto;
   }
+  .equip-chip {
+    background: #0e1730;
+    border: 1px solid #345;
+    border-radius: 3px;
+    padding: 2px 5px;
+    font-size: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1.3;
+  }
+  .equip-chip:hover { background: #1a2850; }
   .tower-btn {
     display: flex;
     align-items: center;
@@ -261,7 +272,14 @@
     justify-content: center;
     gap: 12px;
     margin-bottom: 14px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap; /* v2.5:難度按鈕排成單一橫排 */
+  }
+  /* v2.5:語言選擇按鈕啟用色(青色) */
+  .diff-btn.lang-btn.active {
+    background: linear-gradient(180deg, #00ffe1, #008c7e);
+    border-color: #00ffe1;
+    color: #02030a;
+    box-shadow: 0 0 14px #00ffe188;
   }
   .diff-btn {
     background: linear-gradient(180deg, #131a3d, #0a1028);
@@ -380,18 +398,21 @@
   <div id="main">
     <div id="left-panel">
       <div class="panel">
-        <h3>狀態 STATUS</h3>
-        <div class="stat-row"><span>核心生命</span><span class="v hp" id="ui-lives">20</span></div>
-        <div class="stat-row"><span>能源 ⚡</span><span class="v gold" id="ui-gold">200</span></div>
-        <div class="stat-row"><span>難度</span><span class="v diff" id="ui-difficulty">1</span></div>
-        <div class="stat-row"><span>波次</span><span class="v" id="ui-wave">0 ∞</span></div>
-        <div class="stat-row"><span>分數</span><span class="v" id="ui-score">0</span></div>
-        <div class="stat-row"><span>部署</span><span class="v" id="ui-towers">0/8</span></div>
-        <div class="stat-row"><span>剩餘敵人</span><span class="v" id="ui-enemies">0</span></div>
+        <h3 id="h-status">狀態 STATUS</h3>
+        <div class="stat-row"><span id="l-lives">核心生命</span><span class="v hp" id="ui-lives">20</span></div>
+        <div class="stat-row"><span id="l-gold">能源 ⚡</span><span class="v gold" id="ui-gold">200</span></div>
+        <div class="stat-row"><span id="l-diff">難度</span><span class="v diff" id="ui-difficulty">1</span></div>
+        <div class="stat-row"><span id="l-wave">波次</span><span class="v" id="ui-wave">0 ∞</span></div>
+        <div class="stat-row"><span id="l-score">分數</span><span class="v" id="ui-score">0</span></div>
+        <div class="stat-row"><span id="l-deploy">部署</span><span class="v" id="ui-towers">0/8</span></div>
+        <div class="stat-row"><span id="l-enemies">剩餘敵人</span><span class="v" id="ui-enemies">0</span></div>
       </div>
       <div class="panel">
-        <h3>建造 BUILD</h3>
+        <h3 id="h-build">建造 BUILD</h3>
         <div id="tower-list"></div>
+      </div>
+      <div class="btn-row">
+        <button class="action" id="equiplib-btn" style="background:linear-gradient(180deg,#ffd700,#c9a800); color:#1a1500; box-shadow:0 0 10px #ffd70088;">🎒 裝備庫</button>
       </div>
       <div class="btn-row">
         <button class="action" id="start-wave-btn">下一波</button>
@@ -415,11 +436,11 @@
 
     <div id="right-panel">
       <div class="panel" id="tower-info-panel">
-        <h3>單位資訊</h3>
+        <h3 id="h-info">單位資訊</h3>
         <div id="tower-info-body" style="color:#99aabb; font-size:11px;">點選地圖上的塔查看資訊</div>
       </div>
       <div class="panel">
-        <h3>戰況 LOG</h3>
+        <h3 id="h-log">戰況 LOG</h3>
         <div id="log"></div>
       </div>
     </div>
@@ -428,10 +449,44 @@
 
 <button class="mute-btn" id="mute-btn">[ 音效: 開 ]</button>
 
+<!-- v2.5:裝備庫獨立彈窗 — 配裝 + 合成 + 購買 -->
+<div id="equip-modal" style="display:none; position:fixed; inset:0; background:rgba(2,3,10,0.92); z-index:120; align-items:center; justify-content:center;">
+  <div style="background:linear-gradient(180deg,#0a0e1f,#050810); border:2px solid #ffd700; box-shadow:0 0 30px #ffd70066; border-radius:10px; padding:18px; width:min(720px,94%); max-height:88vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h3 id="em-title" style="color:#ffd700; letter-spacing:3px; text-shadow:0 0 8px #ffd70088;">裝備庫 EQUIPMENT</h3>
+      <button class="action danger" id="em-close" style="padding:5px 14px; font-size:12px;">關閉</button>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+      <button class="action" id="em-buy" style="font-size:12px; padding:7px 12px; background:linear-gradient(180deg,#ffd700,#c9a800); color:#1a1500;">🛒 購買裝備 (300⚡)</button>
+      <button class="action" id="em-combine" style="font-size:12px; padding:7px 12px;" disabled>⚙ 合成升星</button>
+      <span id="em-combine-hint" style="font-size:10px; color:#99aabb; align-self:center;">每 3 件同類型同星級 → 合成高一星</span>
+    </div>
+    <div id="em-selinfo" style="font-size:11px; color:#ffe600; min-height:18px; margin-bottom:6px;"></div>
+    <div style="display:flex; gap:14px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:240px;">
+        <div id="em-inv-hdr" style="font-size:11px; color:#00ffe1; letter-spacing:1px; margin-bottom:6px;">庫存</div>
+        <div id="em-inventory" style="display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start;"></div>
+      </div>
+      <div style="flex:1; min-width:240px;">
+        <div id="em-tower-hdr" style="font-size:11px; color:#00ffe1; letter-spacing:1px; margin-bottom:6px;">友軍單位</div>
+        <div id="em-towers" style="display:flex; flex-direction:column; gap:5px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="title-screen">
   <h1>NEON DEFENSE</h1>
-  <div class="sub">// 像素科幻塔防 //</div>
-  <div class="controls">
+  <div class="sub" id="title-sub">// 像素科幻塔防 //</div>
+  <div id="lang-section" style="margin-bottom:18px;">
+    <div id="lang-label" style="color:#00ffe1; font-size:12px; letter-spacing:3px; margin-bottom:8px;">語言 / LANGUAGE</div>
+    <div class="diff-grid" id="lang-grid" style="margin-bottom:0;">
+      <button class="diff-btn lang-btn" data-lang="zh">中文</button>
+      <button class="diff-btn lang-btn" data-lang="en">English</button>
+      <button class="diff-btn lang-btn" data-lang="ja">日本語</button>
+    </div>
+  </div>
+  <div class="controls" id="title-controls">
     <div><span>►</span> 在左側面板選擇單位,點地圖空格放置</div>
     <div><span>►</span> 點選已放置的塔可升級或拆除回收</div>
     <div><span>►</span> 友軍機甲可放在路徑上阻擋敵人</div>
@@ -445,7 +500,7 @@
     <div><span>►</span> 鍵盤 <span>1-9</span> 快速選擇單位 / <span>R</span> 轉向 / <span>空白鍵</span> 開始下一波</div>
   </div>
   <div id="difficulty-section">
-    <h3>// 選擇難度 //</h3>
+    <h3 id="diff-header">// 選擇難度 //</h3>
     <div class="diff-grid" id="diff-grid"></div>
     <div id="diff-desc"></div>
   </div>
@@ -777,6 +832,113 @@ function drawObstaclePixel(ctx, x, y, kind) {
   ctx.restore();
 }
 
+// ---------------- v2.5 多語系 i18n(中 / 英 / 日)----------------
+let LANG = 'zh';
+const CATKEY = { '砲台強化':'tower', '核心防禦':'core', '特殊效果':'special' };
+const I18N = {
+  zh: {
+    on:'開', off:'關',
+    controls:['在左側選擇單位,點地圖空格放置','點選已放置的塔可升級、拆除或配裝','友軍機甲可放在路徑上阻擋敵人','<span>無止盡模式</span>:撐越久分數越高,每 5 波出 Boss','每 5 波三選一<span>強化</span>(每項綁定一個詛咒)','每波結束獲得 1 件<span>裝備</span>,可在「裝備庫」配裝/合成/購買','軌道砲為<span>直線攻擊</span>,按 R 或旋轉鈕轉向','鍵盤 1-9 / 0 選單位,空白鍵開下一波'],
+    title:{ sub:'// 像素科幻塔防 //' },
+    lang:{ label:'語言 / LANGUAGE' },
+    panel:{ status:'狀態 STATUS', build:'建造 BUILD', equip:'裝備 EQUIP', info:'單位資訊', log:'戰況 LOG' },
+    stat:{ lives:'核心生命', gold:'能源 ⚡', diff:'難度', wave:'波次', score:'分數', deploy:'部署', enemies:'剩餘敵人' },
+    btn:{ nextwave:'下一波', boss:'BOSS波', waveactive:'進行中…', auto:'自動', buyslot:'擴充部署位 +1', slotcap:'部署位已達上限', buybuff:'購買強化 2選1', equiplib:'🎒 裝備庫', combine:'⚙ 合成升星', combinenone:'⚙ 無可合成裝備', buyequip:'🛒 購買裝備', close:'關閉', unequip:'卸下', upgrade:'升級', maxed:'已滿級', sell:'拆除', rotate:'🔄 軌道砲方向', play:'啟動防禦系統', restart:'重新開始' },
+    mute:{ on:'[ 音效: 開 ]', off:'[ 音效: 關 ]' },
+    diffHeader:'// 選擇難度 //',
+    info:{ select:'點選地圖上的塔查看資訊', range:'射程', dmg:'傷害', rate:'射速', chain:'連鎖', targets:'目標', poison:'毒性', pct:'百分比', radius:'範圍', splash:'爆風', slow:'減速', pierce:'穿透', dmgbuff:'傷害增益', ratebuff:'射速增益', goldbonus:'金錢加成', status:'狀態', nostack:'(不疊加)', kill3:'擊殺 ×3', equip:'⚙ 裝備', equipped:'未裝備', tapEquip:'點選下方裝備配置:', noEquip:'庫存無可用裝備', placeHint:'點擊地圖{0}部署', pathWord:'路徑', emptyWord:'空格' },
+    equip:{ scope:'瞄準鏡', overclock:'超頻晶片', warhead:'高爆彈頭', critcore:'暴擊核心', omni:'全能模組', frost:'寒冰彈頭' },
+    equipEff:{ scope:'射程 +{0}%', overclock:'射速 +{0}%', warhead:'傷害 +{0}%', critcore:'爆擊率 {0}% · 爆擊傷害 ×2', omni:'射程/射速/傷害 各 +{0}%', frost:'傷害 +{0}% · 命中減速 45% ({1}s)' },
+    modal:{ title:'裝備庫 EQUIPMENT', invHdr:'庫存(點選一件再點右側單位裝備)', noInv:'尚無裝備 — 每波結束獲得 1 件', selPrefix:'已選:', towerHdr:'友軍單位', noTower:'尚未部署任何單位', cur:'當前', none:'無', equipBtn:'裝備', buyEquipFull:'🛒 購買裝備 (300⚡)', combineHint:'每 3 件同類型同星級 → 合成高一星' },
+    log:{ welcome:'歡迎來到 NEON DEFENSE', noGold:'能源不足!', equipReward:'🎁 波次獎勵裝備:{0} {1}', combined:'⚙ 合成了 {0} 件升星裝備', bought:'🛒 購買裝備:{0} {1}(−300⚡)', curse:'☠ 詛咒纏身:{0} — {1}', buff:'✦ 強化:{0} — {1}', upgraded:'★ {0} 升級至 Lv.{1} ★', recycled:'回收 {0} (+{1}⚡)', waveStart:'◆ 第 {0} 波開始', bossWave:'◆◆ 第 {0} 波 — BOSS 波次來襲! ◆◆' },
+    towers:{
+      laser:{name:'雷射砲塔',desc:'快速單體攻擊'}, plasma:{name:'電漿砲',desc:'拋擲手雷 集中爆炸'},
+      cryo:{name:'冰凍塔',desc:'範圍減速 80%(不疊加)'}, tesla:{name:'鏈電塔',desc:'閃電連鎖跳躍多個敵人'},
+      rail:{name:'軌道砲',desc:'直線穿透 (放置時按 R 轉向;友軍機甲會擋線)'}, mech:{name:'友軍機甲',desc:'部署於路徑阻擋敵人,波次結束回血'},
+      command:{name:'指揮塔',desc:'增益周圍砲台(不攻擊)'}, sniper:{name:'狙擊塔',desc:'超長射程 高傷單體'},
+      poison:{name:'毒素塔',desc:'劇毒持續傷害 (可疊加)'}, greed:{name:'猥瑣發育終結者',desc:'不攻擊;範圍內敵人死亡 金錢×3(不疊加)'}
+    },
+    diff:{ 1:{tier:'輕度',desc:'輕度 — 入門難度,基礎敵人'}, 2:{tier:'中度',desc:'中度 — 解鎖 盾兵'}, 3:{tier:'重度',desc:'重度 — 解鎖 盾兵 + 治療單位,需要嚴密布陣'}, 4:{tier:'印度',desc:'★ 印度難度 ★ 全部解鎖 + 血量 ×9,真正的試煉'} },
+    buffcat:{ tower:'砲台強化', core:'核心防禦', special:'特殊效果' },
+    buff:{ tdmg:{name:'火力強化',desc:'全砲台傷害 +12%'}, trate:{name:'系統超頻',desc:'全砲台射速 +12%'}, trange:{name:'感測升級',desc:'全砲台射程 +12%'}, maxlife:{name:'裝甲板',desc:'核心生命上限 +6,並回復 6'}, heal:{name:'緊急修復',desc:'立即回復 14 點核心生命'}, slot:{name:'擴充槽位',desc:'部署上限 +1'}, purify:{name:'淨化協議',desc:'移除一個已累積的詛咒'}, refund:{name:'戰術升級',desc:'免費升級隨機一座砲台'} },
+    curse:{ dmg:{name:'武器衰變',desc:'全砲台傷害 −6%'}, rate:{name:'迴路過熱',desc:'全砲台射速 −6%'}, range:{name:'感測干擾',desc:'全砲台射程 −5%'}, espd:{name:'狂暴訊號',desc:'敵人速度 +15%'}, ehp:{name:'裝甲強化',desc:'敵人血量 +20%'}, earm:{name:'力場護盾',desc:'敵人防禦 +1'}, fault:{name:'系統故障',desc:'每波隨機 1 座砲台整波當機'} },
+    buffUI:{ title:'★ 選擇強化 ★', sub:'撐過第 {0} 波 — {1} 選 1 強化(每項都綁定一個詛咒)', good:'✦ 強化:{0}', curse:'☠ 詛咒:{0} — {1}' },
+    end:{ lose:'◆ 系統淪陷 ◆', loseMsg:'核心被攻破了…撐到第 {0} 波', score:'最終分數: {0}' }
+  },
+  en: {
+    on:'ON', off:'OFF',
+    controls:['Pick a unit on the left, click an empty tile to place','Click a placed tower to upgrade, sell or equip it','Allied Mechs can be placed on the path to block enemies','<span>Endless mode</span>: survive longer for more score, Boss every 5 waves','Every 5 waves choose 1 of 3 <span>upgrades</span> (each carries a curse)','Each wave grants 1 <span>equipment</span> — equip/combine/buy in the Equipment menu','Railgun fires in a <span>straight line</span>; press R or the rotate button to turn','Keys 1-9 / 0 select units, Space starts the next wave'],
+    title:{ sub:'// PIXEL SCI-FI TOWER DEFENSE //' },
+    lang:{ label:'語言 / LANGUAGE' },
+    panel:{ status:'STATUS', build:'BUILD', equip:'EQUIPMENT', info:'UNIT INFO', log:'LOG' },
+    stat:{ lives:'Core Life', gold:'Energy ⚡', diff:'Difficulty', wave:'Wave', score:'Score', deploy:'Deployed', enemies:'Enemies Left' },
+    btn:{ nextwave:'Next Wave', boss:'BOSS Wave', waveactive:'In progress…', auto:'Auto', buyslot:'Buy Slot +1', slotcap:'Slot cap reached', buybuff:'Buy Upgrade (1 of 2)', equiplib:'🎒 Equipment', combine:'⚙ Combine', combinenone:'⚙ Nothing to Combine', buyequip:'🛒 Buy Equip', close:'Close', unequip:'Unequip', upgrade:'Upgrade', maxed:'Maxed', sell:'Sell', rotate:'🔄 Railgun Dir', play:'START DEFENSE', restart:'Restart' },
+    mute:{ on:'[ Sound: ON ]', off:'[ Sound: OFF ]' },
+    diffHeader:'// SELECT DIFFICULTY //',
+    info:{ select:'Click a tower on the map to see info', range:'Range', dmg:'Damage', rate:'Fire Rate', chain:'Chain', targets:'targets', poison:'Poison', pct:'%HP/s', radius:'Radius', splash:'Splash', slow:'Slow', pierce:'Pierce', dmgbuff:'Dmg Buff', ratebuff:'Rate Buff', goldbonus:'Gold Bonus', status:'Status', nostack:'(no stack)', kill3:'Kill ×3', equip:'⚙ Equipment', equipped:'None equipped', tapEquip:'Tap an item below to equip:', noEquip:'No equipment available', placeHint:'Click {0} on the map to deploy', pathWord:'a path tile', emptyWord:'an empty tile' },
+    equip:{ scope:'Scope', overclock:'Overclock Chip', warhead:'HE Warhead', critcore:'Crit Core', omni:'Omni Module', frost:'Frost Warhead' },
+    equipEff:{ scope:'Range +{0}%', overclock:'Fire Rate +{0}%', warhead:'Damage +{0}%', critcore:'Crit {0}% · ×2 dmg', omni:'Range/Rate/Dmg +{0}% each', frost:'Damage +{0}% · slow 45% ({1}s)' },
+    modal:{ title:'EQUIPMENT', invHdr:'Inventory (pick an item, then a unit on the right)', noInv:'No equipment yet — 1 awarded each wave', selPrefix:'Selected: ', towerHdr:'Allied Units', noTower:'No units deployed yet', cur:'Current', none:'None', equipBtn:'Equip', buyEquipFull:'🛒 Buy Equipment (300⚡)', combineHint:'Every 3 of same type & star → combine into next star' },
+    log:{ welcome:'Welcome to NEON DEFENSE', noGold:'Not enough energy!', equipReward:'🎁 Wave reward: {0} {1}', combined:'⚙ Combined {0} item(s) into higher star', bought:'🛒 Bought equipment: {0} {1} (−300⚡)', curse:'☠ Cursed: {0} — {1}', buff:'✦ Upgrade: {0} — {1}', upgraded:'★ {0} upgraded to Lv.{1} ★', recycled:'Recycled {0} (+{1}⚡)', waveStart:'◆ Wave {0} begins', bossWave:'◆◆ Wave {0} — BOSS WAVE incoming! ◆◆' },
+    towers:{
+      laser:{name:'Laser Turret',desc:'Fast single-target'}, plasma:{name:'Plasma Cannon',desc:'Lobbed grenade, focused blast'},
+      cryo:{name:'Cryo Tower',desc:'AOE slow 80% (no stack)'}, tesla:{name:'Tesla Coil',desc:'Chain lightning across enemies'},
+      rail:{name:'Railgun',desc:'Piercing line (press R to rotate; mech blocks)'}, mech:{name:'Ally Mech',desc:'Blocks enemies on path, heals at wave end'},
+      command:{name:'Command Tower',desc:'Buffs nearby towers (no attack)'}, sniper:{name:'Sniper Tower',desc:'Very long range, high single hit'},
+      poison:{name:'Toxin Tower',desc:'Stacking poison DoT'}, greed:{name:'Greed Terminator',desc:'No attack; kills in range give ×3 gold (no stack)'}
+    },
+    diff:{ 1:{tier:'EASY',desc:'Easy — beginner, basic enemies'}, 2:{tier:'NORMAL',desc:'Normal — unlocks Shield'}, 3:{tier:'HARD',desc:'Hard — unlocks Shield + Healer, needs tight defense'}, 4:{tier:'INSANE',desc:'★ INSANE ★ all unlocked + HP ×9, the true trial'} },
+    buffcat:{ tower:'Tower Boost', core:'Core Defense', special:'Special' },
+    buff:{ tdmg:{name:'Firepower',desc:'All tower damage +12%'}, trate:{name:'Overclock',desc:'All fire rate +12%'}, trange:{name:'Sensor Upgrade',desc:'All range +12%'}, maxlife:{name:'Armor Plate',desc:'Max core life +6 and heal 6'}, heal:{name:'Repair',desc:'Instantly heal 14 core life'}, slot:{name:'Extra Slot',desc:'Deploy cap +1'}, purify:{name:'Purify',desc:'Remove one accumulated curse'}, refund:{name:'Tactical Upgrade',desc:'Free upgrade a random tower'} },
+    curse:{ dmg:{name:'Weapon Decay',desc:'All tower damage −6%'}, rate:{name:'Circuit Overheat',desc:'All fire rate −6%'}, range:{name:'Sensor Jam',desc:'All range −5%'}, espd:{name:'Frenzy Signal',desc:'Enemy speed +15%'}, ehp:{name:'Armor Boost',desc:'Enemy HP +20%'}, earm:{name:'Force Shield',desc:'Enemy armor +1'}, fault:{name:'System Fault',desc:'1 random tower disabled each wave'} },
+    buffUI:{ title:'★ CHOOSE UPGRADE ★', sub:'Survived wave {0} — choose 1 of {1} (each carries a curse)', good:'✦ Upgrade: {0}', curse:'☠ Curse: {0} — {1}' },
+    end:{ lose:'◆ SYSTEM BREACH ◆', loseMsg:'The core was breached… reached wave {0}', score:'Final Score: {0}' }
+  },
+  ja: {
+    on:'オン', off:'オフ',
+    controls:['左でユニットを選び、マップの空きマスに配置','配置済みの塔をクリックで強化・撤去・装備','味方メックは経路に置いて敵を阻止','<span>エンドレス</span>:長く耐えるほど高スコア、5ウェーブ毎にBoss','5ウェーブ毎に3択<span>強化</span>(各々に呪い付き)','毎ウェーブ<span>装備</span>を1件入手 — 装備庫で装着/合成/購入','レールガンは<span>直線攻撃</span>、Rか回転ボタンで方向転換','キー 1-9 / 0 でユニット選択、スペースで次ウェーブ'],
+    title:{ sub:'// ピクセルSFタワーディフェンス //' },
+    lang:{ label:'語言 / LANGUAGE' },
+    panel:{ status:'ステータス', build:'建造', equip:'装備', info:'ユニット情報', log:'ログ' },
+    stat:{ lives:'コアHP', gold:'エネルギー ⚡', diff:'難易度', wave:'ウェーブ', score:'スコア', deploy:'配置', enemies:'残り敵' },
+    btn:{ nextwave:'次のウェーブ', boss:'BOSSウェーブ', waveactive:'進行中…', auto:'オート', buyslot:'配置枠 +1', slotcap:'配置枠が上限', buybuff:'強化購入 2択', equiplib:'🎒 装備庫', combine:'⚙ 合成', combinenone:'⚙ 合成不可', buyequip:'🛒 装備購入', close:'閉じる', unequip:'外す', upgrade:'強化', maxed:'最大Lv', sell:'撤去', rotate:'🔄 レールガン方向', play:'防衛開始', restart:'リスタート' },
+    mute:{ on:'[ 音: オン ]', off:'[ 音: オフ ]' },
+    diffHeader:'// 難易度を選択 //',
+    info:{ select:'マップ上の塔をクリックして情報表示', range:'射程', dmg:'ダメージ', rate:'連射', chain:'連鎖', targets:'体', poison:'毒', pct:'割合HP/s', radius:'範囲', splash:'爆風', slow:'減速', pierce:'貫通', dmgbuff:'ダメージ強化', ratebuff:'連射強化', goldbonus:'金銭ボーナス', status:'状態', nostack:'(重複なし)', kill3:'撃破 ×3', equip:'⚙ 装備', equipped:'未装備', tapEquip:'下の装備をタップして装着:', noEquip:'装着可能な装備なし', placeHint:'マップの{0}をクリックで配置', pathWord:'経路', emptyWord:'空きマス' },
+    equip:{ scope:'スコープ', overclock:'オーバークロックチップ', warhead:'高爆弾頭', critcore:'クリティカルコア', omni:'オムニモジュール', frost:'氷結弾頭' },
+    equipEff:{ scope:'射程 +{0}%', overclock:'連射 +{0}%', warhead:'ダメージ +{0}%', critcore:'会心率 {0}% · 会心ダメージ ×2', omni:'射程/連射/ダメージ 各 +{0}%', frost:'ダメージ +{0}% · 命中で減速 45% ({1}s)' },
+    modal:{ title:'装備庫 EQUIPMENT', invHdr:'在庫(1件選んでから右のユニットを装備)', noInv:'装備なし — 毎ウェーブ終了で1件入手', selPrefix:'選択中:', towerHdr:'味方ユニット', noTower:'ユニット未配置', cur:'現在', none:'なし', equipBtn:'装着', buyEquipFull:'🛒 装備購入 (300⚡)', combineHint:'同種同星3件 → 1つ上の星に合成' },
+    log:{ welcome:'NEON DEFENSE へようこそ', noGold:'エネルギー不足!', equipReward:'🎁 ウェーブ報酬:{0} {1}', combined:'⚙ {0} 件を上位星に合成', bought:'🛒 装備購入:{0} {1}(−300⚡)', curse:'☠ 呪い:{0} — {1}', buff:'✦ 強化:{0} — {1}', upgraded:'★ {0} を Lv.{1} に強化 ★', recycled:'撤去 {0} (+{1}⚡)', waveStart:'◆ ウェーブ {0} 開始', bossWave:'◆◆ ウェーブ {0} — BOSSウェーブ襲来! ◆◆' },
+    towers:{
+      laser:{name:'レーザー砲塔',desc:'高速単体攻撃'}, plasma:{name:'プラズマ砲',desc:'手榴弾投擲・集中爆発'},
+      cryo:{name:'冷凍塔',desc:'範囲減速80%(重複なし)'}, tesla:{name:'連鎖電撃塔',desc:'複数の敵へ連鎖する稲妻'},
+      rail:{name:'レールガン',desc:'直線貫通(設置時Rで回転・味方メックが遮断)'}, mech:{name:'味方メック',desc:'経路に配置し敵を阻止、ウェーブ終了で回復'},
+      command:{name:'指揮塔',desc:'周囲の砲台を強化(攻撃しない)'}, sniper:{name:'スナイパー塔',desc:'超長射程・高単体ダメージ'},
+      poison:{name:'毒素塔',desc:'毒の継続ダメージ(重複可)'}, greed:{name:'守銭奴ターミネーター',desc:'攻撃しない;範囲内の敵撃破で金銭×3(重複なし)'}
+    },
+    diff:{ 1:{tier:'イージー',desc:'イージー — 入門難度、基本の敵'}, 2:{tier:'ノーマル',desc:'ノーマル — 盾兵が出現'}, 3:{tier:'ハード',desc:'ハード — 盾兵+ヒーラー、緻密な配置が必要'}, 4:{tier:'インド級',desc:'★ インド級 ★ 全解放+HP×9、真の試練'} },
+    buffcat:{ tower:'砲台強化', core:'コア防御', special:'特殊効果' },
+    buff:{ tdmg:{name:'火力強化',desc:'全砲台ダメージ +12%'}, trate:{name:'システム加速',desc:'全砲台連射 +12%'}, trange:{name:'センサー強化',desc:'全砲台射程 +12%'}, maxlife:{name:'装甲板',desc:'コア最大HP +6、6回復'}, heal:{name:'緊急修理',desc:'コアHPを14回復'}, slot:{name:'スロット拡張',desc:'配置上限 +1'}, purify:{name:'浄化',desc:'蓄積した呪いを1つ除去'}, refund:{name:'戦術強化',desc:'ランダムな砲台を無料強化'} },
+    curse:{ dmg:{name:'武器劣化',desc:'全砲台ダメージ −6%'}, rate:{name:'回路過熱',desc:'全砲台連射 −6%'}, range:{name:'センサー妨害',desc:'全砲台射程 −5%'}, espd:{name:'狂暴信号',desc:'敵速度 +15%'}, ehp:{name:'装甲強化',desc:'敵HP +20%'}, earm:{name:'フォースシールド',desc:'敵防御 +1'}, fault:{name:'システム障害',desc:'毎ウェーブ砲台1基が停止'} },
+    buffUI:{ title:'★ 強化を選択 ★', sub:'ウェーブ {0} を突破 — {1} 択(各々に呪いが付随)', good:'✦ 強化:{0}', curse:'☠ 呪い:{0} — {1}' },
+    end:{ lose:'◆ システム陥落 ◆', loseMsg:'コアが突破された…ウェーブ {0} まで到達', score:'最終スコア: {0}' }
+  }
+};
+function _resolve(o, key) { return key.split('.').reduce((a,k)=> (a!=null && a[k]!=null) ? a[k] : undefined, o); }
+function t(key) { const v = _resolve(I18N[LANG], key); return v != null ? v : (_resolve(I18N.zh, key) ?? key); }
+function tf(key, ...args) { let s = t(key); args.forEach((a,i)=> { s = s.split('{'+i+'}').join(a); }); return s; }
+const tr = t; // 別名:供區域變數名為 t 的函式(如 updateTowerInfo)使用,避免遮蔽
+function towerName(id) { return t('towers.'+id+'.name'); }
+function towerDesc(id) { return t('towers.'+id+'.desc'); }
+function equipName(type) { return t('equip.'+type); }
+function diffTier(d) { return t('diff.'+d+'.tier'); }
+function diffDesc(d) { return t('diff.'+d+'.desc'); }
+function buffName(id) { return t('buff.'+id+'.name'); }
+function buffDesc(id) { return t('buff.'+id+'.desc'); }
+function buffCatName(cat) { return t('buffcat.'+(CATKEY[cat]||cat)); }
+function curseName(id) { return t('curse.'+id+'.name'); }
+function curseDesc(id) { return t('curse.'+id+'.desc'); }
+
 // ---------------- Tower defs ----------------
 const TOWER_DEFS = {
   laser: {
@@ -888,9 +1050,249 @@ const TOWER_DEFS = {
       // v2.3 Lv4:成本 980,毒素強化至 75/s × 4.5s
       {cost:980, range:150, dmg:28, fireRate:3.6, poison:75, poisonDur:4.5}
     ]
+  },
+  greed: {
+    // v2.4 新增:猥瑣發育終結者 — 不攻擊;範圍內敵人死亡時,該擊殺金錢 ×3(不疊加)
+    name: '猥瑣發育終結者', desc:'不攻擊;範圍內敵人死亡 金錢×3(不疊加)', cost: 260,
+    range: 130, dmg: 0, fireRate: 0, color:'#ffd700', proj:'none', isGreed: true,
+    upgrades:[
+      {cost:200, range:160},
+      {cost:300, range:195},
+      // v2.4 Lv4:成本 1400,範圍 235(全圖覆蓋型猥瑣發育)
+      {cost:1400, range:235}
+    ]
   }
 };
-const TOWER_ORDER = ['laser','plasma','cryo','tesla','rail','mech','command','sniper','poison'];
+const TOWER_ORDER = ['laser','plasma','cryo','tesla','rail','mech','command','sniper','poison','greed'];
+
+// ---------------- v2.4 裝備系統 ----------------
+// 每波結束給 1 件裝備,稀有度 1★~5★;波次越後高星機率越高。
+// 解鎖門檻:1★ 開局即有、2★ 第 5 波、3★ 第 11 波、4★ 第 15 波、5★ 第 21 波。
+// 3 件「完全相同(同類型同星級)」的裝備可合成 1 件高一星的同類型裝備(可連鎖合成)。
+const EQUIP_DEFS = {
+  scope:     { name:'瞄準鏡',   icon:'🎯', short:'射程' },
+  overclock: { name:'超頻晶片', icon:'⚡', short:'射速' },
+  warhead:   { name:'高爆彈頭', icon:'💥', short:'傷害' },
+  critcore:  { name:'暴擊核心', icon:'✴', short:'爆擊' },
+  omni:      { name:'全能模組', icon:'🔷', short:'全能' },
+  frost:     { name:'寒冰彈頭', icon:'❄', short:'冰緩' }
+};
+const EQUIP_TYPES = ['scope','overclock','warhead','critcore','omni','frost'];
+// 1★→5★ 星級顏色(灰/綠/藍/紫/金)
+const STAR_COLORS = ['#9aa4b2','#7CFC7C','#4fc3ff','#c08bff','#ffd700'];
+// 各星級「解鎖所需的波次」(在該波結束時就能拿到)
+const EQUIP_UNLOCK = {1:0, 2:5, 3:11, 4:15, 5:21};
+// v2.5:星級加成查表(取代原本線性 ×星級)— 1★~5★ = 1% / 2% / 4% / 6% / 12%
+const EQUIP_STAR_SCALE = [0.01, 0.02, 0.04, 0.06, 0.12];
+function starScale(star) { return EQUIP_STAR_SCALE[Math.max(0, Math.min(4, star - 1))]; }
+
+// 依裝備類型 + 星級換算實際數值加成(v2.5:採查表式星級加成)
+function equipMods(eq) {
+  const sc = starScale(eq.star);
+  const m = { rangeMult:1, dmgMult:1, rateMult:1, critChance:0, critMult:1, slow:0, slowDur:0 };
+  switch (eq.type) {
+    case 'scope':     m.rangeMult += sc; break;                          // 射程 +加成
+    case 'overclock': m.rateMult  += sc; break;                          // 射速 +加成
+    case 'warhead':   m.dmgMult   += sc; break;                          // 傷害 +加成
+    case 'critcore':  m.critChance = sc; m.critMult = 2.0; break;        // 爆擊率 = 加成,爆擊 ×2
+    case 'omni':      m.rangeMult += sc; m.dmgMult += sc; m.rateMult += sc; break; // 全能:三圍各 +加成
+    case 'frost':     m.dmgMult += sc; m.slow = 0.45; m.slowDur = 0.4 + 0.1*eq.star; break; // 傷害+ & 命中減速
+  }
+  return m;
+}
+function equipEffectText(eq) {
+  const p = Math.round(starScale(eq.star) * 100);
+  switch (eq.type) {
+    case 'scope':     return tf('equipEff.scope', p);
+    case 'overclock': return tf('equipEff.overclock', p);
+    case 'warhead':   return tf('equipEff.warhead', p);
+    case 'critcore':  return tf('equipEff.critcore', p);
+    case 'omni':      return tf('equipEff.omni', p);
+    case 'frost':     return tf('equipEff.frost', p, (0.4+0.1*eq.star).toFixed(1));
+  }
+  return '';
+}
+// 依「剛清除的波次」抽出裝備星級 — 平滑遞增:中心星級隨波次上升
+function rollEquipmentStar(wave) {
+  const center = 1 + wave * 0.08;   // W1≈1.08、W15≈2.2、W30≈3.4、W50≈5
+  const weights = [0,0,0,0,0,0];
+  let total = 0;
+  for (let s = 1; s <= 5; s++) {
+    if (wave < EQUIP_UNLOCK[s]) continue;       // 尚未解鎖
+    const w = 1 / (1 + 2 * Math.abs(s - center));
+    weights[s] = w; total += w;
+  }
+  if (total <= 0) return 1;
+  let r = Math.random() * total;
+  for (let s = 1; s <= 5; s++) { r -= weights[s]; if (r <= 0) return s; }
+  return 1;
+}
+const EQUIP_BUY_COST = 300; // v2.5:購買 1 件一星裝備的能源花費
+let equipModalSel = null;   // v2.5:裝備庫彈窗中目前選取的裝備 uid
+function grantEquipment(wave) {
+  const star = rollEquipmentStar(wave);
+  const type = EQUIP_TYPES[Math.floor(Math.random() * EQUIP_TYPES.length)];
+  Game.inventory.push({ uid: Game.equipUid++, type, star, assigned: false });
+  log(tf('log.equipReward', EQUIP_DEFS[type].icon + equipName(type), '★'.repeat(star)), 'e-good');
+  refreshEquipUI();
+}
+// v2.5:花 300⚡ 購買 1 件一星裝備(類型隨機)
+function buyEquipment() {
+  if (Game.gold < EQUIP_BUY_COST || Game.ended) return;
+  Game.gold -= EQUIP_BUY_COST;
+  const type = EQUIP_TYPES[Math.floor(Math.random() * EQUIP_TYPES.length)];
+  Game.inventory.push({ uid: Game.equipUid++, type, star: 1, assigned: false });
+  log(tf('log.bought', EQUIP_DEFS[type].icon + equipName(type), '★'), 'e-good');
+  AudioFX.place();
+  refreshEquipUI();
+  updateUI();
+}
+// 合成:每 3 件「同類型同星級」未裝備的裝備 → 1 件高一星(連鎖合成直到不足 3 件)
+function combineEquip() {
+  let combined = 0, changed = true;
+  while (changed) {
+    changed = false;
+    for (const type of EQUIP_TYPES) {
+      for (let star = 1; star < 5; star++) {
+        const avail = Game.inventory.filter(e => e.type === type && e.star === star && !e.assigned);
+        if (avail.length >= 3) {
+          for (let i = 0; i < 3; i++) {
+            Game.inventory.splice(Game.inventory.indexOf(avail[i]), 1);
+          }
+          Game.inventory.push({ uid: Game.equipUid++, type, star: star + 1, assigned: false });
+          combined++; changed = true;
+        }
+      }
+    }
+  }
+  if (combined) { log(tf('log.combined', combined), 'e-good'); AudioFX.upgrade(); }
+  refreshEquipUI();
+  updateTowerInfo();
+}
+function combinableCount() {
+  const groups = {};
+  for (const e of Game.inventory) {
+    if (e.assigned || e.star >= 5) continue;
+    const k = e.type + '_' + e.star;
+    groups[k] = (groups[k] || 0) + 1;
+  }
+  let n = 0; for (const k in groups) n += Math.floor(groups[k] / 3);
+  return n;
+}
+// v2.5:統一刷新裝備相關 UI(彈窗開啟時才渲染彈窗內容)
+function refreshEquipUI() {
+  const modal = document.getElementById('equip-modal');
+  if (modal && modal.style.display !== 'none') renderEquipModal();
+}
+// ---------------- v2.5 裝備庫彈窗 ----------------
+function openEquipModal() {
+  equipModalSel = null;
+  renderEquipModal();
+  document.getElementById('equip-modal').style.display = 'flex';
+  Game.paused = true;
+}
+function closeEquipModal() {
+  document.getElementById('equip-modal').style.display = 'none';
+  Game.paused = false;
+  equipModalSel = null;
+}
+function renderEquipModal() {
+  // 標題與靜態文字
+  document.getElementById('em-title').textContent = t('modal.title');
+  document.getElementById('em-close').textContent = t('btn.close');
+  document.getElementById('em-buy').textContent = `${t('modal.buyEquipFull')}`.replace('300', EQUIP_BUY_COST);
+  document.getElementById('em-combine-hint').textContent = t('modal.combineHint');
+  document.getElementById('em-inv-hdr').textContent = t('modal.invHdr');
+  document.getElementById('em-tower-hdr').textContent = t('modal.towerHdr');
+  // 購買 / 合成按鈕狀態
+  const buyBtn = document.getElementById('em-buy');
+  buyBtn.disabled = Game.gold < EQUIP_BUY_COST || Game.ended;
+  const cn = combinableCount();
+  const cbtn = document.getElementById('em-combine');
+  cbtn.disabled = cn === 0;
+  cbtn.textContent = cn > 0 ? `${t('btn.combine')} (${cn})` : t('btn.combinenone');
+  // 選取資訊
+  const sel = equipModalSel != null ? Game.inventory.find(e => e.uid === equipModalSel) : null;
+  document.getElementById('em-selinfo').textContent = sel
+    ? `${t('modal.selPrefix')}${EQUIP_DEFS[sel.type].icon} ${equipName(sel.type)} ${'★'.repeat(sel.star)} — ${equipEffectText(sel)}`
+    : '';
+  // 庫存(可點選)
+  const inv = document.getElementById('em-inventory');
+  if (!Game.inventory.length) {
+    inv.innerHTML = `<div style="font-size:11px; color:#778;">${t('modal.noInv')}</div>`;
+  } else {
+    let h = '';
+    const sorted = Game.inventory.slice().sort((a,b)=> b.star - a.star || a.type.localeCompare(b.type));
+    for (const e of sorted) {
+      const d = EQUIP_DEFS[e.type];
+      const selStyle = (e.uid === equipModalSel) ? 'box-shadow:0 0 10px #ffe600; border-width:2px;' : '';
+      const usedTag = e.assigned ? ` <span style="color:#7CFC7C; font-size:8px;">●</span>` : '';
+      h += `<button class="equip-chip em-item" data-uid="${e.uid}" title="${equipName(e.type)} — ${equipEffectText(e)}" style="border-color:${STAR_COLORS[e.star-1]}; color:${STAR_COLORS[e.star-1]}; ${selStyle}">${d.icon}${'★'.repeat(e.star)}${usedTag}</button>`;
+    }
+    inv.innerHTML = h;
+    inv.querySelectorAll('.em-item').forEach(b => b.addEventListener('click', () => {
+      const uid = parseInt(b.dataset.uid);
+      equipModalSel = (equipModalSel === uid) ? null : uid;
+      renderEquipModal();
+    }));
+  }
+  // 友軍單位列表(點選/裝備/卸下)
+  const tc = document.getElementById('em-towers');
+  const alive = Game.towers.filter(t => !t.dead);
+  if (!alive.length) {
+    tc.innerHTML = `<div style="font-size:11px; color:#778;">${t('modal.noTower')}</div>`;
+  } else {
+    let h = '';
+    alive.forEach((tw, i) => {
+      const cur = tw.equip
+        ? `<span style="color:${STAR_COLORS[tw.equip.star-1]}">${EQUIP_DEFS[tw.equip.type].icon}${'★'.repeat(tw.equip.star)}</span>`
+        : `<span style="color:#667;">${t('modal.none')}</span>`;
+      const canEquip = sel != null;
+      h += `<div style="display:flex; justify-content:space-between; align-items:center; gap:6px; background:#0e1730; border:1px solid #2a3870; border-radius:4px; padding:4px 7px;">
+        <span style="font-size:11px; color:${tw.def.color};">${towerName(tw.type)} <span style="color:#889;">Lv.${tw.level+1}</span></span>
+        <span style="display:flex; align-items:center; gap:5px; font-size:10px;">${t('modal.cur')}: ${cur}
+          <button class="action em-equip" data-idx="${i}" ${canEquip?'':'disabled'} style="padding:1px 8px; font-size:10px;">${t('modal.equipBtn')}</button>
+          ${tw.equip?`<button class="action danger em-unequip" data-idx="${i}" style="padding:1px 8px; font-size:10px;">${t('btn.unequip')}</button>`:''}
+        </span></div>`;
+    });
+    tc.innerHTML = h;
+    tc.querySelectorAll('.em-equip').forEach(b => b.addEventListener('click', () => {
+      if (equipModalSel == null) return;
+      equipToTower(alive[parseInt(b.dataset.idx)], equipModalSel);
+      equipModalSel = null;
+      renderEquipModal();
+    }));
+    tc.querySelectorAll('.em-unequip').forEach(b => b.addEventListener('click', () => {
+      unequipTower(alive[parseInt(b.dataset.idx)]);
+      renderEquipModal();
+    }));
+  }
+}
+// 範圍內是否有「猥瑣發育終結者」— 用於敵人死亡金錢 ×3 判定(不疊加)
+function greedInRange(enemy) {
+  for (const t of Game.towers) {
+    if (t.dead || !t.def.isGreed) continue;
+    if (dist(enemy, t) <= t.stats.range * Game.fx.towerRange) return true;
+  }
+  return false;
+}
+// 配裝 / 卸下 / 換裝
+function equipToTower(tower, uid) {
+  const eq = Game.inventory.find(e => e.uid === uid);
+  if (!eq) return;
+  for (const t of Game.towers) { if (t.equip && t.equip.uid === uid) { t.equip = null; } } // 從別座移除
+  if (tower.equip) tower.equip.assigned = false; // 釋放原本裝備
+  eq.assigned = true;
+  tower.equip = eq;
+  AudioFX.place();
+  refreshEquipUI();
+  updateTowerInfo();
+}
+function unequipTower(tower) {
+  if (tower.equip) { tower.equip.assigned = false; tower.equip = null; }
+  refreshEquipUI();
+  updateTowerInfo();
+}
 
 // ---------------- Enemy defs ----------------
 // 全域常數 ─ 經濟/部署/難度
@@ -1004,7 +1406,10 @@ const Game = {
   // v1.3:每 5 波玩家 3 選 1 的強化(永久累積)
   buffs: [],
   buffCounts: { tdmg:0, trate:0, trange:0 },
-  maxLives: 20
+  maxLives: 20,
+  // v2.4:裝備庫存(每波結束 +1)
+  inventory: [],
+  equipUid: 1
 };
 const AUTO_DELAY = 4; // 自動開波倒數秒數
 
@@ -1040,7 +1445,7 @@ function applyCurse(id) {
   Game.debuffCounts[id] = (Game.debuffCounts[id]||0) + 1;
   Game.debuffs.push(d);
   recomputeFx();
-  log(`☠ 詛咒纏身:${d.name} — ${d.desc}`, 'e-bad');
+  log(tf('log.curse', curseName(d.id), curseDesc(d.id)), 'e-bad');
 }
 
 // v1.3 每 5 波玩家 3 選 1 強化池(玩家選定:砲台強化 / 核心防禦 / 特殊效果)
@@ -1082,7 +1487,7 @@ function applyBuff(id) {
     }
   }
   recomputeFx();
-  log(`✦ 強化:${b.name} — ${b.desc}`, 'e-good');
+  log(tf('log.buff', buffName(b.id), buffDesc(b.id)), 'e-good');
   updateUI();
 }
 // v1.5:抽出 n 張卡片,每張卡片 = 一個強化 + 一個綁定詛咒
@@ -1103,16 +1508,15 @@ function showBuffChoice(count, titleText, subText) {
   const cards = rollBuffCurseCards(count);
   const cont = document.getElementById('buff-cards');
   cont.innerHTML = '';
-  document.getElementById('buff-title').textContent = titleText || '★ 選擇強化 ★';
-  document.getElementById('buff-sub').textContent = subText
-    || `撐過第 ${Game.wave} 波 — ${count} 選 1 強化(每項都綁定一個詛咒)`;
+  document.getElementById('buff-title').textContent = titleText || t('buffUI.title');
+  document.getElementById('buff-sub').textContent = subText || tf('buffUI.sub', Game.wave, count);
   for (const c of cards) {
     const card = document.createElement('div');
     card.className = 'buff-card';
-    card.innerHTML = `<div class="bc-cat">${c.buff.cat}</div>`
-      + `<div class="bc-name">${c.buff.name}</div>`
-      + `<div class="bc-good">✦ 強化:${c.buff.desc}</div>`
-      + `<div class="bc-curse">☠ 詛咒:${c.curse.name} — ${c.curse.desc}</div>`;
+    card.innerHTML = `<div class="bc-cat">${buffCatName(c.buff.cat)}</div>`
+      + `<div class="bc-name">${buffName(c.buff.id)}</div>`
+      + `<div class="bc-good">${tf('buffUI.good', buffDesc(c.buff.id))}</div>`
+      + `<div class="bc-curse">${tf('buffUI.curse', curseName(c.curse.id), curseDesc(c.curse.id))}</div>`;
     card.addEventListener('click', () => {
       applyBuff(c.buff.id);
       applyCurse(c.curse.id);
@@ -1391,6 +1795,8 @@ class Enemy {
         spawnParticles(this.blockedBy.x, this.blockedBy.y, '#ffaa00', 3);
         if (this.blockedBy.hp <= 0) {
           this.blockedBy.dead = true;
+          // v2.5:機甲陣亡時釋放裝備回庫存
+          if (this.blockedBy.equip) { this.blockedBy.equip.assigned = false; this.blockedBy.equip = null; refreshEquipUI(); }
           log(`友軍機甲陣亡!`, 'e-bad');
           AudioFX.explode();
           spawnParticles(this.blockedBy.x, this.blockedBy.y, '#ffaa00', 20);
@@ -1452,12 +1858,15 @@ class Enemy {
       this.dead = true;
       // v8:第 3 波之後,擊殺獎勵減半(波次 >= 4)
       const rewardMult = Game.wave >= 4 ? 0.5 : 1;
-      const reward = Math.max(1, Math.floor(this.def.reward * rewardMult));
+      let reward = Math.max(1, Math.floor(this.def.reward * rewardMult));
+      // v2.4 猥瑣發育終結者:範圍內死亡 → 金錢 ×3(不疊加)
+      const greedy = greedInRange(this);
+      if (greedy) reward *= 3;
       Game.gold += reward;
       Game.score += reward * 2;
       spawnParticles(this.x, this.y, this.def.color, 12);
-      // v6:擊殺金幣即時顯示 + 浮動 +N⚡ 文字
-      spawnFloatText(this.x, this.y, `+${reward}⚡`, '#ffd700');
+      // v6:擊殺金幣即時顯示 + 浮動 +N⚡ 文字(猥瑣發育加成以金色加大顯示)
+      spawnFloatText(this.x, this.y, greedy ? `+${reward}⚡×3` : `+${reward}⚡`, greedy ? '#ffe600' : '#ffd700');
       // v1.1 分裂體:死亡時分裂出小型敵人
       if (this.def.splitInto && !this.reachedEnd) {
         for (let i=0;i<(this.def.splitCount||2);i++){
@@ -2066,11 +2475,27 @@ class Tower {
     this.fireRateMult = 1;
     // v1.2:被「系統故障」debuff 整波癱瘓
     this.faulted = false;
+    // v2.4:裝備(每座最多 1 件,可隨時替換)
+    this.equip = null;
   }
   get stats() {
     const base = this.def;
-    if (this.level === 0) return base;
-    return Object.assign({}, base, base.upgrades[this.level-1]);
+    let s = (this.level === 0) ? base : Object.assign({}, base, base.upgrades[this.level-1]);
+    // v2.4:套用裝備的 射程/射速/傷害 加成(不可變動原始 def,故先複製)
+    if (this.equip) {
+      const m = equipMods(this.equip);
+      s = Object.assign({}, s);
+      if (s.range)    s.range    *= m.rangeMult;
+      if (s.dmg)      s.dmg      *= m.dmgMult;
+      if (s.fireRate) s.fireRate *= m.rateMult;
+    }
+    return s;
+  }
+  // v2.4:裝備提供的爆擊資訊
+  critInfo() {
+    if (!this.equip) return { chance: 0, mult: 1 };
+    const m = equipMods(this.equip);
+    return { chance: m.critChance, mult: m.critMult };
   }
   canUpgrade() { return this.level < 3; }  // v2.3:每個砲台升級次數多 1 級(可升至 Lv4)
   upgradeCost() { return this.def.upgrades[this.level]?.cost || 0; }
@@ -2088,14 +2513,15 @@ class Tower {
     AudioFX.upgrade();
     this.upgradeFlash = 1.2; // 塔身發光
     Game.upgradeEffects.push(new UpgradeEffect(this.x, this.y, this.def.color, this.level));
-    log(`★ ${this.def.name} 升級至 Lv.${this.level+1} ★`, 'e-good');
+    log(tf('log.upgraded', towerName(this.type), this.level+1), 'e-good');
     return true;
   }
   sell() {
     const ret = Math.floor(this.totalCost * 0.6);
     Game.gold += ret;
+    if (this.equip) { this.equip.assigned = false; this.equip = null; } // v2.4:拆除時釋放裝備回庫存
     AudioFX.sell();
-    log(`回收 ${this.def.name} (+${ret}⚡)`, 'e-warn');
+    log(tf('log.recycled', towerName(this.type), ret), 'e-warn');
     this.dead = true;
     updateUI();
   }
@@ -2107,7 +2533,8 @@ class Tower {
     if (this.disabledTimer > 0) this.disabledTimer -= dt;
     const s = this.stats;
     // v1.1 指揮塔:不攻擊,只提供增益(由 applySupportBuffs 統一處理)
-    if (this.def.isSupport) return;
+    // v2.4 猥瑣發育終結者:不攻擊,只在範圍內提供金錢加成(由 greedInRange/takeDamage 處理)
+    if (this.def.isSupport || this.def.isGreed) return;
     const disabled = this.disabledTimer > 0 || this.faulted;
 
     let best = null;
@@ -2179,12 +2606,21 @@ class Tower {
     this.shotFlash = 1;
     // v7:軌道砲彈道更快;v1.3:狙擊塔彈道也很快
     const projSpeed = (this.type === 'rail') ? 1200 : (this.type === 'sniper' ? 1100 : 500);
+    // v2.4:裝備爆擊與特殊效果(寒冰彈頭命中減速)
+    let dmg = s.dmg * this.dmgMult * Game.fx.towerDmg;
+    const ci = this.critInfo();
+    const isCrit = ci.chance > 0 && Math.random() < ci.chance;
+    if (isCrit) dmg *= ci.mult;
+    const em = this.equip ? equipMods(this.equip) : null;
+    const slowVal = s.slow || (em ? em.slow : 0);
+    const slowDurVal = s.slowDur || (em ? em.slowDur : 0);
+    if (isCrit) spawnFloatText(enemy.x, enemy.y - 12, '✴爆擊!', '#ff3b6b');
     Game.projectiles.push(new Projectile({
       x: this.x, y: this.y, vx: vx*projSpeed, vy: vy*projSpeed,
-      kind: this.def.proj, dmg: s.dmg * this.dmgMult * Game.fx.towerDmg, target: enemy,
+      kind: this.def.proj, dmg: dmg, target: enemy,
       tx: enemy.x, ty: enemy.y,  // v1.5:電漿砲手雷的落點(目標當下位置)
-      splash: s.splash || 0, slow: s.slow || 0, slowDur: s.slowDur || 0,
-      pierce: s.pierce || 0, color: this.def.color,
+      splash: s.splash || 0, slow: slowVal, slowDur: slowDurVal,
+      pierce: s.pierce || 0, color: isCrit ? '#ffffff' : this.def.color,
       poison: s.poison || 0, poisonDur: s.poisonDur || 0
     }));
     // sound
@@ -2200,7 +2636,13 @@ class Tower {
   // v1.8:每跳之間停頓 0.1 秒 — 第一段立即命中,之後每跳排入 Game.teslaChains 由 updateTeslaChains() 依時間推進
   teslaStrike(firstTarget) {
     const s = this.stats;
-    const dmg = s.dmg * this.dmgMult * Game.fx.towerDmg;
+    // v2.4:鏈電塔同樣支援裝備爆擊
+    let dmg = s.dmg * this.dmgMult * Game.fx.towerDmg;
+    const ci = this.critInfo();
+    if (ci.chance > 0 && Math.random() < ci.chance) {
+      dmg *= ci.mult;
+      spawnFloatText(firstTarget.x, firstTarget.y - 12, '✴爆擊!', '#ff3b6b');
+    }
     const maxJumps = s.chainCount || 3;
     // 排入一條鏈電佇列;第一段在 0 延遲後就會被 updateTeslaChains 處理
     Game.teslaChains.push({
@@ -2217,8 +2659,8 @@ class Tower {
     AudioFX.tesla();
   }
   draw(ctx) {
-    // v1.1 指揮塔:常駐增益光環
-    if (this.def.isSupport && !this.dead) {
+    // v1.1 指揮塔 / v2.4 猥瑣發育終結者:常駐範圍光環
+    if ((this.def.isSupport || this.def.isGreed) && !this.dead) {
       const sr = this.stats.range * Game.fx.towerRange;
       ctx.strokeStyle = this.def.color;
       ctx.globalAlpha = 0.10 + Math.sin(Game.time*2)*0.05;
@@ -2427,12 +2869,38 @@ function drawTowerPixel(ctx, t) {
     ctx.fillRect(5, -3, 14, 6);
     ctx.fillStyle = t.shotFlash > 0 ? '#eaffaa' : '#3a5a2a';
     ctx.fillRect(15, -2, 5, 4);
+  } else if (t.type === 'greed') {
+    // v2.4 猥瑣發育終結者:金色錢箱 + 旋轉 $ 符號
+    ctx.fillStyle = '#3a2e05';
+    ctx.fillRect(-10, -9, 20, 18);
+    ctx.fillStyle = t.def.color;
+    ctx.fillRect(-8, -7, 16, 14);
+    ctx.fillStyle = '#2a2200';
+    ctx.fillRect(-6, -5, 12, 10);
+    ctx.fillStyle = '#fff7c0';
+    ctx.font = 'bold 12px Courier New';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const pulse = 0.7 + Math.sin(Game.time*4)*0.3;
+    ctx.globalAlpha = pulse;
+    ctx.fillText('$', 0, 1);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
   ctx.restore();
 
   // center light
   ctx.fillStyle = t.def.color;
   ctx.fillRect(-1.5, -1.5, 3, 3);
+  // v2.4:已裝備標記(右上角星級色點)
+  if (t.equip) {
+    ctx.fillStyle = STAR_COLORS[t.equip.star-1];
+    ctx.beginPath(); ctx.arc(12, -12, 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#0a0e1c';
+    ctx.font = 'bold 7px Courier New';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(t.equip.star, 12, -11.5);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
   ctx.restore();
 }
 
@@ -3180,8 +3648,8 @@ function startWave() {
     }
   }
   // v4:固定經濟改在「部屬階段」發放,這裡不再發
-  if (Game.wave % 5 === 0) log(`◆◆ 第 ${Game.wave} 波 — BOSS 波次來襲! ◆◆`, 'e-bad');
-  else log(`第 ${Game.wave} 波開始!`, 'e-warn');
+  if (Game.wave % 5 === 0) log(tf('log.bossWave', Game.wave), 'e-bad');
+  else log(tf('log.waveStart', Game.wave), 'e-warn');
   AudioFX.waveStart();
   updateUI();
 }
@@ -3218,6 +3686,8 @@ function updateWave(dt) {
     for (const t of Game.towers) t.faulted = false;
     // v1.1 無止盡模式:沒有勝利條件,清波後直接進入下一波部屬階段
     grantDeployBonus(Game.wave + 1);
+    // v2.4:每波結束發放 1 件裝備(稀有度依波次平滑遞增)
+    grantEquipment(Game.wave);
     // v1.2:若開啟自動模式,設定下一波倒數
     if (Game.autoStart) Game.autoCountdown = AUTO_DELAY;
     updateUI();
@@ -3284,11 +3754,9 @@ function endGame(win) {
   screen.classList.toggle('win', win);
   screen.classList.toggle('lose', !win);
   screen.style.display = 'flex';
-  document.getElementById('end-title').textContent = win ? '★ 防禦成功 ★' : '◆ 系統淪陷 ◆';
-  document.getElementById('end-msg').textContent = win
-    ? '你成功擊退所有侵略者!'
-    : `堅持到第 ${Game.wave} 波`;
-  document.getElementById('end-stats').textContent = `最終分數: ${Game.score}`;
+  document.getElementById('end-title').textContent = t('end.lose');
+  document.getElementById('end-msg').textContent = tf('end.loseMsg', Game.wave);
+  document.getElementById('end-stats').textContent = tf('end.score', Game.score);
   if (win) AudioFX.win(); else AudioFX.lose();
 }
 
@@ -3538,6 +4006,8 @@ function simulate(dt) {
     Game.spawnLater.length = 0;
   }
   // cleanup
+  // v2.4:被摧毀的砲台釋放其裝備回庫存
+  for (const t of Game.towers) { if (t.dead && t.equip) { t.equip.assigned = false; t.equip = null; refreshEquipUI(); } }
   Game.towers = Game.towers.filter(t => !t.dead);
   Game.enemies = Game.enemies.filter(e => !e.dead);
   Game.projectiles = Game.projectiles.filter(p => !p.dead);
@@ -3638,9 +4108,9 @@ function buildTowerList() {
     btn.innerHTML = `
       <canvas class="tower-icon" width="28" height="28"></canvas>
       <div class="tower-info">
-        <div class="name">${idx+1}. ${def.name}</div>
+        <div class="name">${idx+1}. ${towerName(type)}</div>
         <div class="cost">${def.cost} ⚡</div>
-        <div class="desc">${def.desc}</div>
+        <div class="desc">${towerDesc(type)}</div>
       </div>
     `;
     btn.addEventListener('click', () => selectTower(type));
@@ -3679,9 +4149,9 @@ function updateRotateBtn() {
   if (!row) return;
   if (Game.selected === 'rail') {
     row.style.display = '';
-    const dirName = ['→ 右','↓ 下','← 左','↑ 上'][Math.round(Game.placeDir/(Math.PI/2))%4];
+    const dirName = ['→','↓','←','↑'][Math.round(Game.placeDir/(Math.PI/2))%4];
     const btn = document.getElementById('rotate-dir-btn');
-    if (btn) btn.textContent = `🔄 軌道砲方向:${dirName}`;
+    if (btn) btn.textContent = `${t('btn.rotate')}:${dirName}`;
   } else {
     row.style.display = 'none';
   }
@@ -3696,7 +4166,7 @@ function updateTowerButtons() {
 function updateUI() {
   document.getElementById('ui-lives').textContent = Game.lives;
   document.getElementById('ui-gold').textContent = Game.gold;
-  document.getElementById('ui-difficulty').textContent = `${DIFFICULTY_INFO[Game.difficulty].tier} (x${DIFFICULTY_INFO[Game.difficulty].mult.toFixed(2)})`;
+  document.getElementById('ui-difficulty').textContent = `${diffTier(Game.difficulty)} (x${DIFFICULTY_INFO[Game.difficulty].mult.toFixed(2)})`;
   document.getElementById('ui-wave').textContent = `${Game.wave} ∞`;
   document.getElementById('ui-score').textContent = Game.score;
   const alive = Game.towers.filter(t=>!t.dead).length;
@@ -3708,21 +4178,21 @@ function updateUI() {
   startBtn.disabled = Game.waveActive || Game.ended;
   // v1.1 無止盡:永遠有下一波,Boss 波特別標示
   const next = Game.wave + 1;
-  startBtn.textContent = Game.waveActive ? '進行中…'
-    : (next % 5 === 0 ? `BOSS波 (${next})` : `下一波 (${next})`);
+  startBtn.textContent = Game.waveActive ? t('btn.waveactive')
+    : (next % 5 === 0 ? `${t('btn.boss')} (${next})` : `${t('btn.nextwave')} (${next})`);
   // v1.4:購買部署位按鈕(能源不足時禁用)
   // v2.1:已達上限 25 時禁用並顯示「已達上限」
   const buyBtn = document.getElementById('buyslot-btn');
   if (buyBtn) {
     const atCap = MAX_TOWERS >= MAX_TOWERS_CAP;
     buyBtn.disabled = atCap || Game.gold < SLOT_COST || Game.ended;
-    buyBtn.textContent = atCap ? `部署位已達上限(${MAX_TOWERS_CAP})` : `擴充部署位 +1(${SLOT_COST}⚡)`;
+    buyBtn.textContent = atCap ? `${t('btn.slotcap')}(${MAX_TOWERS_CAP})` : `${t('btn.buyslot')}(${SLOT_COST}⚡)`;
   }
   // v1.5:購買強化按鈕(能源不足時禁用)
   const bbBtn = document.getElementById('buybuff-btn');
   if (bbBtn) {
     bbBtn.disabled = Game.gold < BUFF_COST || Game.ended;
-    bbBtn.textContent = `購買強化 2選1(${BUFF_COST}⚡)`;
+    bbBtn.textContent = `${t('btn.buybuff')}(${BUFF_COST}⚡)`;
   }
 }
 function updateTowerInfo() {
@@ -3730,40 +4200,61 @@ function updateTowerInfo() {
   if (Game.selectedTower && !Game.selectedTower.dead) {
     const t = Game.selectedTower;
     const s = t.stats;
-    let html = `<div style="color:${t.def.color}; font-weight:bold; font-size:13px; margin-bottom:6px;">${t.def.name} Lv.${t.level+1}</div>`;
-    html += `<div class="tinfo-row"><span class="l">射程</span><span class="r">${Math.floor(s.range)}</span></div>`;
+    let html = `<div style="color:${t.def.color}; font-weight:bold; font-size:13px; margin-bottom:6px;">${towerName(t.type)} Lv.${t.level+1}</div>`;
+    html += `<div class="tinfo-row"><span class="l">${tr('info.range')}</span><span class="r">${Math.floor(s.range)}</span></div>`;
     if (t.def.isSupport) {
-      // v1.1 指揮塔:顯示增益數值
-      // v1.8:指揮塔不疊加,在欄位內加上明確標記
-      html += `<div class="tinfo-row"><span class="l">傷害增益</span><span class="r">+${Math.round(s.dmgBonus*100)}% <span style="color:#ff8888">(不疊加)</span></span></div>`;
-      html += `<div class="tinfo-row"><span class="l">射速增益</span><span class="r">+${Math.round(s.fireRateBonus*100)}% <span style="color:#ff8888">(不疊加)</span></span></div>`;
-      html += `<div style="font-size:9px;color:#ff8888;margin-top:3px;">⚠ v1.8:多座指揮塔不再疊加;每座砲台只吃範圍內最強的一座</div>`;
+      html += `<div class="tinfo-row"><span class="l">${tr('info.dmgbuff')}</span><span class="r">+${Math.round(s.dmgBonus*100)}% <span style="color:#ff8888">${tr('info.nostack')}</span></span></div>`;
+      html += `<div class="tinfo-row"><span class="l">${tr('info.ratebuff')}</span><span class="r">+${Math.round(s.fireRateBonus*100)}% <span style="color:#ff8888">${tr('info.nostack')}</span></span></div>`;
+    } else if (t.def.isGreed) {
+      html += `<div class="tinfo-row"><span class="l">${tr('info.goldbonus')}</span><span class="r" style="color:#ffe600">${tr('info.kill3')}</span></div>`;
     } else {
       const buffed = t.dmgMult > 1 || t.fireRateMult > 1;
       const bTag = buffed ? ' <span style="color:#ffb84d">▲</span>' : '';
-      html += `<div class="tinfo-row"><span class="l">傷害</span><span class="r">${Math.floor(s.dmg*t.dmgMult)}${bTag}</span></div>`;
-      html += `<div class="tinfo-row"><span class="l">射速</span><span class="r">${(s.fireRate*t.fireRateMult).toFixed(1)}/秒${bTag}</span></div>`;
-      if (s.chainCount) html += `<div class="tinfo-row"><span class="l">連鎖</span><span class="r">${s.chainCount+1} 目標</span></div>`;
-      if (s.poison) html += `<div class="tinfo-row"><span class="l">毒性</span><span class="r">+${s.poison}/s × ${s.poisonDur}s</span></div>`;
+      html += `<div class="tinfo-row"><span class="l">${tr('info.dmg')}</span><span class="r">${Math.floor(s.dmg*t.dmgMult)}${bTag}</span></div>`;
+      html += `<div class="tinfo-row"><span class="l">${tr('info.rate')}</span><span class="r">${(s.fireRate*t.fireRateMult).toFixed(1)}/s${bTag}</span></div>`;
+      if (s.chainCount) html += `<div class="tinfo-row"><span class="l">${tr('info.chain')}</span><span class="r">${s.chainCount+1} ${tr('info.targets')}</span></div>`;
+      if (s.poison) html += `<div class="tinfo-row"><span class="l">${tr('info.poison')}</span><span class="r">+${s.poison}/s × ${s.poisonDur}s</span></div>`;
       if (t.type === 'poison') {
-        html += `<div class="tinfo-row"><span class="l">百分比</span><span class="r">+1%maxHP/s × 5層</span></div>`;
-        html += `<div class="tinfo-row"><span class="l">範圍</span><span class="r">60(半徑1.5格)</span></div>`;
+        html += `<div class="tinfo-row"><span class="l">${tr('info.pct')}</span><span class="r">+1%maxHP/s × 5</span></div>`;
+        html += `<div class="tinfo-row"><span class="l">${tr('info.radius')}</span><span class="r">60</span></div>`;
       }
-      if (s.splash) html += `<div class="tinfo-row"><span class="l">爆風</span><span class="r">${s.splash}</span></div>`;
-      if (s.slow) html += `<div class="tinfo-row"><span class="l">減速</span><span class="r">${Math.floor(s.slow*100)}%</span></div>`;
-      if (s.pierce) html += `<div class="tinfo-row"><span class="l">穿透</span><span class="r">${s.pierce}</span></div>`;
+      if (s.splash) html += `<div class="tinfo-row"><span class="l">${tr('info.splash')}</span><span class="r">${s.splash}</span></div>`;
+      if (s.slow) html += `<div class="tinfo-row"><span class="l">${tr('info.slow')}</span><span class="r">${Math.floor(s.slow*100)}%</span></div>`;
+      if (s.pierce) html += `<div class="tinfo-row"><span class="l">${tr('info.pierce')}</span><span class="r">${s.pierce}</span></div>`;
       if (t.isMech) html += `<div class="tinfo-row"><span class="l">HP</span><span class="r">${Math.floor(t.hp)}/${t.maxHp}</span></div>`;
     }
-    if (t.disabledTimer > 0) html += `<div class="tinfo-row"><span class="l" style="color:#b35cff">狀態</span><span class="r" style="color:#b35cff">被干擾癱瘓!</span></div>`;
+    if (t.disabledTimer > 0) html += `<div class="tinfo-row"><span class="l" style="color:#b35cff">${tr('info.status')}</span><span class="r" style="color:#b35cff">⚠</span></div>`;
+    // v2.4:裝備區(每座單位最多 1 件,可隨時替換)
+    html += `<div style="margin-top:8px; border-top:1px solid #2a3870; padding-top:6px;">`;
+    html += `<div style="font-size:10px; color:#ffd700; margin-bottom:3px;">${tr('info.equip')}</div>`;
+    if (t.equip) {
+      const d = EQUIP_DEFS[t.equip.type];
+      html += `<div class="tinfo-row"><span class="l" style="color:${STAR_COLORS[t.equip.star-1]}">${d.icon}${equipName(t.equip.type)} ${'★'.repeat(t.equip.star)}</span><span class="r"><button class="action danger" id="unequip-btn" style="padding:1px 7px; font-size:10px;">${tr('btn.unequip')}</button></span></div>`;
+      html += `<div style="font-size:9px; color:#9adcff; margin:2px 0;">${equipEffectText(t.equip)}</div>`;
+    } else {
+      html += `<div style="font-size:9px; color:#778; margin-bottom:2px;">${tr('info.equipped')}</div>`;
+    }
+    const avail = Game.inventory.filter(e => !e.assigned);
+    if (avail.length) {
+      html += `<div style="font-size:9px; color:#99aabb; margin:3px 0 2px;">${tr('info.tapEquip')}</div><div style="display:flex; flex-wrap:wrap; gap:3px;">`;
+      for (const e of avail) {
+        const d = EQUIP_DEFS[e.type];
+        html += `<button class="equip-chip" data-uid="${e.uid}" title="${equipName(e.type)} — ${equipEffectText(e)}" style="border-color:${STAR_COLORS[e.star-1]}; color:${STAR_COLORS[e.star-1]};">${d.icon}${e.star}★</button>`;
+      }
+      html += `</div>`;
+    } else if (!t.equip) {
+      html += `<div style="font-size:9px; color:#667;">${tr('info.noEquip')}</div>`;
+    }
+    html += `</div>`;
     html += `<div style="margin-top:8px; display:flex; gap:4px;">`;
     if (t.canUpgrade()) {
       const cu = t.upgradeCost();
-      html += `<button class="action" id="upg-btn" ${Game.gold<cu?'disabled':''} style="flex:1; padding:6px; font-size:11px;">升級 ${cu}⚡</button>`;
+      html += `<button class="action" id="upg-btn" ${Game.gold<cu?'disabled':''} style="flex:1; padding:6px; font-size:11px;">${tr('btn.upgrade')} ${cu}⚡</button>`;
     } else {
-      html += `<button class="action" disabled style="flex:1; padding:6px; font-size:11px;">已滿級</button>`;
+      html += `<button class="action" disabled style="flex:1; padding:6px; font-size:11px;">${tr('btn.maxed')}</button>`;
     }
     const sellRet = Math.floor(t.totalCost*0.6);
-    html += `<button class="action danger" id="sell-btn" style="flex:1; padding:6px; font-size:11px;">拆除 +${sellRet}</button>`;
+    html += `<button class="action danger" id="sell-btn" style="flex:1; padding:6px; font-size:11px;">${tr('btn.sell')} +${sellRet}</button>`;
     html += `</div>`;
     body.innerHTML = html;
     document.getElementById('upg-btn')?.addEventListener('click', () => {
@@ -3777,31 +4268,36 @@ function updateTowerInfo() {
       updateUI();
       updateTowerInfo();
     });
+    // v2.4:裝備配置 / 卸下
+    document.getElementById('unequip-btn')?.addEventListener('click', () => unequipTower(t));
+    document.querySelectorAll('#tower-info-body .equip-chip').forEach(btn => {
+      btn.addEventListener('click', () => equipToTower(t, parseInt(btn.dataset.uid)));
+    });
   } else if (Game.selected) {
     const def = TOWER_DEFS[Game.selected];
-    let h = `<div style="color:${def.color}; font-weight:bold; font-size:13px;">${def.name}</div>
-      <div style="font-size:10px; color:#99aabb; margin:4px 0;">${def.desc}</div>
-      <div class="tinfo-row"><span class="l">花費</span><span class="r">${def.cost}⚡</span></div>
-      <div class="tinfo-row"><span class="l">射程</span><span class="r">${def.range}</span></div>`;
+    let h = `<div style="color:${def.color}; font-weight:bold; font-size:13px;">${towerName(Game.selected)}</div>
+      <div style="font-size:10px; color:#99aabb; margin:4px 0;">${towerDesc(Game.selected)}</div>
+      <div class="tinfo-row"><span class="l">${t('info.range')}</span><span class="r">${def.range}</span></div>
+      <div class="tinfo-row"><span class="l">${t('stat.gold')}</span><span class="r">${def.cost}⚡</span></div>`;
     if (def.isSupport) {
-      // v1.8:標註不疊加
-      h += `<div class="tinfo-row"><span class="l">傷害增益</span><span class="r">+${Math.round(def.dmgBonus*100)}% <span style="color:#ff8888">(不疊加)</span></span></div>`;
-      h += `<div class="tinfo-row"><span class="l">射速增益</span><span class="r">+${Math.round(def.fireRateBonus*100)}% <span style="color:#ff8888">(不疊加)</span></span></div>`;
-      h += `<div style="font-size:9px;color:#ff8888;margin-top:3px;">⚠ 多座指揮塔不疊加,只取範圍內最強一座</div>`;
+      h += `<div class="tinfo-row"><span class="l">${t('info.dmgbuff')}</span><span class="r">+${Math.round(def.dmgBonus*100)}% <span style="color:#ff8888">${t('info.nostack')}</span></span></div>`;
+      h += `<div class="tinfo-row"><span class="l">${t('info.ratebuff')}</span><span class="r">+${Math.round(def.fireRateBonus*100)}% <span style="color:#ff8888">${t('info.nostack')}</span></span></div>`;
+    } else if (def.isGreed) {
+      h += `<div class="tinfo-row"><span class="l">${t('info.goldbonus')}</span><span class="r" style="color:#ffe600">${t('info.kill3')}</span></div>`;
     } else {
-      h += `<div class="tinfo-row"><span class="l">傷害</span><span class="r">${def.dmg}</span></div>`;
-      h += `<div class="tinfo-row"><span class="l">射速</span><span class="r">${def.fireRate}/秒</span></div>`;
-      if (def.chainCount) h += `<div class="tinfo-row"><span class="l">連鎖</span><span class="r">${def.chainCount+1} 目標</span></div>`;
-      if (def.poison) h += `<div class="tinfo-row"><span class="l">毒性</span><span class="r">+${def.poison}/s × ${def.poisonDur}s</span></div>`;
+      h += `<div class="tinfo-row"><span class="l">${t('info.dmg')}</span><span class="r">${def.dmg}</span></div>`;
+      h += `<div class="tinfo-row"><span class="l">${t('info.rate')}</span><span class="r">${def.fireRate}/s</span></div>`;
+      if (def.chainCount) h += `<div class="tinfo-row"><span class="l">${t('info.chain')}</span><span class="r">${def.chainCount+1} ${t('info.targets')}</span></div>`;
+      if (def.poison) h += `<div class="tinfo-row"><span class="l">${t('info.poison')}</span><span class="r">+${def.poison}/s × ${def.poisonDur}s</span></div>`;
       if (Game.selected === 'poison') {
-        h += `<div class="tinfo-row"><span class="l">百分比</span><span class="r">+1%maxHP/s × 5層</span></div>`;
-        h += `<div class="tinfo-row"><span class="l">範圍</span><span class="r">60(半徑1.5格)</span></div>`;
+        h += `<div class="tinfo-row"><span class="l">${t('info.pct')}</span><span class="r">+1%maxHP/s × 5</span></div>`;
+        h += `<div class="tinfo-row"><span class="l">${t('info.radius')}</span><span class="r">60</span></div>`;
       }
     }
-    h += `<div style="margin-top:6px; color:#ffe600; font-size:10px;">點擊地圖${Game.selected==='mech'?'路徑':'空格'}部署</div>`;
+    h += `<div style="margin-top:6px; color:#ffe600; font-size:10px;">${tf('info.placeHint', Game.selected==='mech'?t('info.pathWord'):t('info.emptyWord'))}</div>`;
     if (Game.selected === 'rail') {
-      const dirName = ['→ 右','↓ 下','← 左','↑ 上'][Math.round(Game.placeDir/(Math.PI/2))%4];
-      h += `<button class="action" id="rotate-btn" style="width:100%;margin-top:6px;padding:6px;font-size:11px;">🔄 旋轉方向(${dirName})</button>`;
+      const dirName = ['→','↓','←','↑'][Math.round(Game.placeDir/(Math.PI/2))%4];
+      h += `<button class="action" id="rotate-btn" style="width:100%;margin-top:6px;padding:6px;font-size:11px;">${t('btn.rotate')} (${dirName})</button>`;
     }
     body.innerHTML = h;
     // v1.4:旋轉按鈕(手機無鍵盤可用,等同按 R)
@@ -3811,7 +4307,7 @@ function updateTowerInfo() {
       updateRotateBtn();
     });
   } else {
-    body.innerHTML = '點選地圖上的塔查看資訊';
+    body.innerHTML = t('info.select');
   }
 }
 
@@ -3887,7 +4383,7 @@ document.getElementById('speed-btn').addEventListener('click', () => {
 document.getElementById('auto-btn').addEventListener('click', () => {
   Game.autoStart = !Game.autoStart;
   const btn = document.getElementById('auto-btn');
-  btn.textContent = '自動:' + (Game.autoStart ? '開' : '關');
+  btn.textContent = t('btn.auto') + ':' + (Game.autoStart ? t('on') : t('off'));
   btn.classList.toggle('selected', Game.autoStart);
   // 開啟時若正處於部屬階段(非進行中),立即開始倒數
   if (Game.autoStart && !Game.waveActive && !Game.ended) Game.autoCountdown = AUTO_DELAY;
@@ -3910,7 +4406,7 @@ document.getElementById('buybuff-btn').addEventListener('click', () => {
   Game.gold -= BUFF_COST;
   AudioFX.deploy();
   log(`▼ 購買強化 −${BUFF_COST}⚡ — 二選一`, 'e-warn');
-  showBuffChoice(2, '★ 購買強化 ★', `已花費 ${BUFF_COST}⚡ — 二選一強化(每項都綁定一個詛咒)`);
+  showBuffChoice(2, null, null);
   updateUI();
 });
 // v1.5 左側面板旋轉按鈕(等同按 R,手機無鍵盤可用)
@@ -3927,7 +4423,7 @@ function buildDifficultySelector() {
     const b = document.createElement('button');
     b.className = 'diff-btn';
     b.dataset.diff = i;
-    b.textContent = DIFFICULTY_INFO[i].tier;
+    b.textContent = diffTier(i);
     if (i === Game.difficulty) b.classList.add('active');
     b.addEventListener('click', () => setDifficulty(i));
     grid.appendChild(b);
@@ -3936,7 +4432,7 @@ function buildDifficultySelector() {
 }
 function setDifficulty(d) {
   Game.difficulty = d;
-  document.querySelectorAll('.diff-btn').forEach(b => {
+  document.querySelectorAll('#diff-grid .diff-btn').forEach(b => {
     b.classList.toggle('active', +b.dataset.diff === d);
   });
   updateDifficultyDesc();
@@ -3944,23 +4440,19 @@ function setDifficulty(d) {
 function updateDifficultyDesc() {
   const info = DIFFICULTY_INFO[Game.difficulty];
   const mult = info.mult;
-  const unlocks = (info.unlocks || []).map(u => ENEMY_DEFS[u].name);
-  let html = `難度 <strong>${info.tier}</strong> — 敵人血量 <span class="multiplier">x${mult.toFixed(2)}</span>`;
-  html += `<br>${info.desc}`;
-  if (unlocks.length) html += ` <span class="unlock">[解鎖: ${unlocks.join('、')}]</span>`;
+  let html = `${t('stat.diff')} <strong>${diffTier(Game.difficulty)}</strong> — HP <span class="multiplier">x${mult.toFixed(2)}</span>`;
+  html += `<br>${diffDesc(Game.difficulty)}`;
   document.getElementById('diff-desc').innerHTML = html;
 }
 
 document.getElementById('play-btn').addEventListener('click', () => {
   document.getElementById('title-screen').style.display = 'none';
-  AudioFX.waveStart();
-  log(`系統啟動,準備迎戰 (難度 ${DIFFICULTY_INFO[Game.difficulty].tier})`, 'e-good');
 });
 document.getElementById('restart-btn').addEventListener('click', () => location.reload());
 document.getElementById('mute-btn').addEventListener('click', () => {
   const m = !AudioFX.isMuted();
   AudioFX.setMuted(m);
-  document.getElementById('mute-btn').textContent = `[ 音效: ${m?'關':'開'} ]`;
+  document.getElementById('mute-btn').textContent = m ? t('mute.off') : t('mute.on');
 });
 
 document.addEventListener('keydown', e => {
@@ -3975,18 +4467,77 @@ document.addEventListener('keydown', e => {
     }
   }
   else if (e.key >= '1' && e.key <= '9') {
-    const t = TOWER_ORDER[parseInt(e.key)-1];
-    if (t) selectTower(t);
+    const tt = TOWER_ORDER[parseInt(e.key)-1];
+    if (tt) selectTower(tt);
+  }
+  else if (e.key === '0') {
+    // v2.4:第 10 個單位(猥瑣發育終結者)
+    const tt = TOWER_ORDER[9];
+    if (tt) selectTower(tt);
   }
 });
 
+// ---------------- v2.5 裝備庫彈窗 + 語言 事件 ----------------
+document.getElementById('equiplib-btn').addEventListener('click', openEquipModal);
+document.getElementById('em-close').addEventListener('click', closeEquipModal);
+document.getElementById('em-buy').addEventListener('click', buyEquipment);
+document.getElementById('em-combine').addEventListener('click', combineEquip);
+document.getElementById('equip-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'equip-modal') closeEquipModal(); // 點背景關閉
+});
+// 語言切換
+document.querySelectorAll('.lang-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    LANG = b.dataset.lang;
+    document.querySelectorAll('.lang-btn').forEach(x => x.classList.toggle('active', x === b));
+    applyLang();
+  });
+});
+// v2.5:套用目前語言到所有靜態與動態 UI
+function applyLang() {
+  document.documentElement.lang = (LANG === 'zh') ? 'zh-TW' : LANG;
+  const setText = (id, str) => { const el = document.getElementById(id); if (el) el.textContent = str; };
+  setText('title-sub', t('title.sub'));
+  const ctrlEl = document.getElementById('title-controls');
+  if (ctrlEl) {
+    const lines = t('controls') || [];
+    ctrlEl.innerHTML = lines.map(s => `<div><span>&#9658;</span> ${s}</div>`).join('');
+  }
+  setText('lang-label', t('lang.label'));
+  setText('diff-header', t('diffHeader'));
+  setText('play-btn', t('btn.play'));
+  setText('restart-btn', t('btn.restart'));
+  setText('h-status', t('panel.status'));
+  setText('h-build', t('panel.build'));
+  setText('h-info', t('panel.info'));
+  setText('h-log', t('panel.log'));
+  setText('l-lives', t('stat.lives'));
+  setText('l-gold', t('stat.gold'));
+  setText('l-diff', t('stat.diff'));
+  setText('l-wave', t('stat.wave'));
+  setText('l-score', t('stat.score'));
+  setText('l-deploy', t('stat.deploy'));
+  setText('l-enemies', t('stat.enemies'));
+  setText('equiplib-btn', t('btn.equiplib'));
+  document.getElementById('mute-btn').textContent = AudioFX.isMuted() ? t('mute.off') : t('mute.on');
+  const autoBtn = document.getElementById('auto-btn');
+  autoBtn.textContent = t('btn.auto') + ':' + (Game.autoStart ? t('on') : t('off'));
+  buildTowerList();
+  buildDifficultySelector();
+  updateUI();
+  updateTowerInfo();
+  updateRotateBtn();
+  refreshEquipUI();
+}
+
 // ---------------- Init ----------------
+document.querySelector('.lang-btn[data-lang="zh"]').classList.add('active');
 buildTowerList();
 buildDifficultySelector();
 updateUI();
 updateTowerInfo();
-log('歡迎來到 NEON DEFENSE', 'e-good');
-log('在左側選擇單位開始建造', 'e-warn');
+applyLang();
+log(t('log.welcome'), 'e-good');
 // v4:遊戲啟動就先發第 1 波的部屬資金
 grantDeployBonus(1);
 requestAnimationFrame(loop);
