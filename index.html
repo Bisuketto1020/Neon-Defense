@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>NEON DEFENSE v2.5 - 像素塔防(無止盡模式)</title>
+<title>NEON DEFENSE v2.7 - 像素塔防(無止盡模式)</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -150,16 +150,20 @@
   button.action.danger { background: linear-gradient(180deg, #ff4d6d, #b22d4a); box-shadow: 0 0 10px #ff4d6d88; color: #fff;}
   button.action.selected { background: linear-gradient(180deg, #ffe600, #c9a800); box-shadow: 0 0 12px #ffe600aa; }
 
-  #right-panel { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  #right-panel { width: 248px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; max-height: 644px; overflow-y: auto; }
+  #right-panel::-webkit-scrollbar { width: 6px; }
+  #right-panel::-webkit-scrollbar-thumb { background: #1c2660; border-radius: 3px; }
+  #control-panel .btn-row { margin-bottom: 6px; }
+  #control-panel .btn-row:last-child { margin-bottom: 0; }
+  #fx-panel h3 { color: #ffe600; text-shadow: 0 0 6px #ffe60088; }
+  #fx-body { line-height: 1.5; }
   #log {
-    flex: 1;
     background: #0c1330;
-    border: 1px solid #00ffe1;
     border-radius: 6px;
-    padding: 8px;
+    padding: 6px 4px;
     font-size: 10px;
     overflow-y: auto;
-    max-height: 240px;
+    max-height: 150px;
     color: #aac9ee;
     line-height: 1.4;
   }
@@ -411,35 +415,42 @@
         <h3 id="h-build">建造 BUILD</h3>
         <div id="tower-list"></div>
       </div>
-      <div class="btn-row">
-        <button class="action" id="equiplib-btn" style="background:linear-gradient(180deg,#ffd700,#c9a800); color:#1a1500; box-shadow:0 0 10px #ffd70088;">🎒 裝備庫</button>
-      </div>
-      <div class="btn-row">
-        <button class="action" id="start-wave-btn">下一波</button>
-      </div>
-      <div class="btn-row">
-        <button class="action" id="speed-btn">2x</button>
-        <button class="action" id="auto-btn">自動:關</button>
-      </div>
-      <div class="btn-row">
-        <button class="action" id="buyslot-btn">擴充部署位 +1(3000⚡)</button>
-      </div>
-      <div class="btn-row">
-        <button class="action" id="buybuff-btn">購買強化 2選1(1000⚡)</button>
-      </div>
-      <div class="btn-row" id="rotate-row" style="display:none;">
-        <button class="action selected" id="rotate-dir-btn">🔄 軌道砲方向:→ 右</button>
-      </div>
     </div>
 
     <canvas id="game" width="960" height="640"></canvas>
 
     <div id="right-panel">
+      <div class="panel" id="control-panel">
+        <h3 id="h-control">控制 CONTROL</h3>
+        <div class="btn-row">
+          <button class="action" id="start-wave-btn">下一波</button>
+        </div>
+        <div class="btn-row">
+          <button class="action" id="speed-btn">2x</button>
+          <button class="action" id="auto-btn">自動:關</button>
+        </div>
+        <div class="btn-row">
+          <button class="action" id="equiplib-btn" style="background:linear-gradient(180deg,#ffd700,#c9a800); color:#1a1500; box-shadow:0 0 10px #ffd70088;">🎒 裝備庫</button>
+        </div>
+        <div class="btn-row">
+          <button class="action" id="buyslot-btn">擴充部署位 +1(3000⚡)</button>
+        </div>
+        <div class="btn-row">
+          <button class="action" id="buybuff-btn">購買強化 2選1(1000⚡)</button>
+        </div>
+        <div class="btn-row" id="rotate-row" style="display:none;">
+          <button class="action selected" id="rotate-dir-btn">🔄 軌道砲方向:→ 右</button>
+        </div>
+      </div>
       <div class="panel" id="tower-info-panel">
         <h3 id="h-info">單位資訊</h3>
         <div id="tower-info-body" style="color:#99aabb; font-size:11px;">點選地圖上的塔查看資訊</div>
       </div>
-      <div class="panel">
+      <div class="panel" id="fx-panel">
+        <h3 id="h-fx">強化 / 詛咒</h3>
+        <div id="fx-body" style="font-size:10px; max-height:150px; overflow-y:auto;"></div>
+      </div>
+      <div class="panel" id="log-panel" style="flex:1; display:flex; flex-direction:column; min-height:0;">
         <h3 id="h-log">戰況 LOG</h3>
         <div id="log"></div>
       </div>
@@ -456,8 +467,11 @@
       <h3 id="em-title" style="color:#ffd700; letter-spacing:3px; text-shadow:0 0 8px #ffd70088;">裝備庫 EQUIPMENT</h3>
       <button class="action danger" id="em-close" style="padding:5px 14px; font-size:12px;">關閉</button>
     </div>
-    <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-      <button class="action" id="em-buy" style="font-size:12px; padding:7px 12px; background:linear-gradient(180deg,#ffd700,#c9a800); color:#1a1500;">🛒 購買裝備 (300⚡)</button>
+    <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+      <span id="em-buy-label" style="font-size:12px; color:#ffd700; align-self:center;">🛒 購買裝備</span>
+      <button class="action em-buy-btn" data-count="1" style="font-size:12px; padding:7px 12px; background:linear-gradient(180deg,#ffd700,#c9a800); color:#1a1500;">×1</button>
+      <button class="action em-buy-btn" data-count="50" style="font-size:12px; padding:7px 12px; background:linear-gradient(180deg,#ffd700,#c9a800); color:#1a1500;">×50</button>
+      <button class="action em-buy-btn" data-count="1000" style="font-size:12px; padding:7px 12px; background:linear-gradient(180deg,#ffd700,#c9a800); color:#1a1500;">×1000</button>
       <button class="action" id="em-combine" style="font-size:12px; padding:7px 12px;" disabled>⚙ 合成升星</button>
       <span id="em-combine-hint" style="font-size:10px; color:#99aabb; align-self:center;">每 3 件同類型同星級 → 合成高一星</span>
     </div>
@@ -841,7 +855,8 @@ const I18N = {
     controls:['在左側選擇單位,點地圖空格放置','點選已放置的塔可升級、拆除或配裝','友軍機甲可放在路徑上阻擋敵人','<span>無止盡模式</span>:撐越久分數越高,每 5 波出 Boss','每 5 波三選一<span>強化</span>(每項綁定一個詛咒)','每波結束獲得 1 件<span>裝備</span>,可在「裝備庫」配裝/合成/購買','軌道砲為<span>直線攻擊</span>,按 R 或旋轉鈕轉向','鍵盤 1-9 / 0 選單位,空白鍵開下一波'],
     title:{ sub:'// 像素科幻塔防 //' },
     lang:{ label:'語言 / LANGUAGE' },
-    panel:{ status:'狀態 STATUS', build:'建造 BUILD', equip:'裝備 EQUIP', info:'單位資訊', log:'戰況 LOG' },
+    panel:{ status:'狀態 STATUS', build:'建造 BUILD', equip:'裝備 EQUIP', info:'單位資訊', log:'戰況 LOG', control:'控制 CONTROL', fx:'強化 / 詛咒' },
+    fxui:{ none:'目前沒有任何強化或詛咒', buffs:'✦ 強化', curses:'☠ 詛咒' },
     stat:{ lives:'核心生命', gold:'能源 ⚡', diff:'難度', wave:'波次', score:'分數', deploy:'部署', enemies:'剩餘敵人' },
     btn:{ nextwave:'下一波', boss:'BOSS波', waveactive:'進行中…', auto:'自動', buyslot:'擴充部署位 +1', slotcap:'部署位已達上限', buybuff:'購買強化 2選1', equiplib:'🎒 裝備庫', combine:'⚙ 合成升星', combinenone:'⚙ 無可合成裝備', buyequip:'🛒 購買裝備', close:'關閉', unequip:'卸下', upgrade:'升級', maxed:'已滿級', sell:'拆除', rotate:'🔄 軌道砲方向', play:'啟動防禦系統', restart:'重新開始' },
     mute:{ on:'[ 音效: 開 ]', off:'[ 音效: 關 ]' },
@@ -849,8 +864,8 @@ const I18N = {
     info:{ select:'點選地圖上的塔查看資訊', range:'射程', dmg:'傷害', rate:'射速', chain:'連鎖', targets:'目標', poison:'毒性', pct:'百分比', radius:'範圍', splash:'爆風', slow:'減速', pierce:'穿透', dmgbuff:'傷害增益', ratebuff:'射速增益', goldbonus:'金錢加成', status:'狀態', nostack:'(不疊加)', kill3:'擊殺 ×3', equip:'⚙ 裝備', equipped:'未裝備', tapEquip:'點選下方裝備配置:', noEquip:'庫存無可用裝備', placeHint:'點擊地圖{0}部署', pathWord:'路徑', emptyWord:'空格' },
     equip:{ scope:'瞄準鏡', overclock:'超頻晶片', warhead:'高爆彈頭', critcore:'暴擊核心', omni:'全能模組', frost:'寒冰彈頭' },
     equipEff:{ scope:'射程 +{0}%', overclock:'射速 +{0}%', warhead:'傷害 +{0}%', critcore:'爆擊率 {0}% · 爆擊傷害 ×2', omni:'射程/射速/傷害 各 +{0}%', frost:'傷害 +{0}% · 命中減速 45% ({1}s)' },
-    modal:{ title:'裝備庫 EQUIPMENT', invHdr:'庫存(點選一件再點右側單位裝備)', noInv:'尚無裝備 — 每波結束獲得 1 件', selPrefix:'已選:', towerHdr:'友軍單位', noTower:'尚未部署任何單位', cur:'當前', none:'無', equipBtn:'裝備', buyEquipFull:'🛒 購買裝備 (300⚡)', combineHint:'每 3 件同類型同星級 → 合成高一星' },
-    log:{ welcome:'歡迎來到 NEON DEFENSE', noGold:'能源不足!', equipReward:'🎁 波次獎勵裝備:{0} {1}', combined:'⚙ 合成了 {0} 件升星裝備', bought:'🛒 購買裝備:{0} {1}(−300⚡)', curse:'☠ 詛咒纏身:{0} — {1}', buff:'✦ 強化:{0} — {1}', upgraded:'★ {0} 升級至 Lv.{1} ★', recycled:'回收 {0} (+{1}⚡)', waveStart:'◆ 第 {0} 波開始', bossWave:'◆◆ 第 {0} 波 — BOSS 波次來襲! ◆◆' },
+    modal:{ title:'裝備庫 EQUIPMENT', invHdr:'庫存(點選一件再點右側單位裝備)', noInv:'尚無裝備 — 每波結束獲得 1 件', selPrefix:'已選:', towerHdr:'友軍單位', noTower:'尚未部署任何單位', cur:'當前', none:'無', equipBtn:'裝備', buyEquip:'🛒 購買裝備', each:'件', combineHint:'每 3 件同類型同星級 → 合成高一星' },
+    log:{ welcome:'歡迎來到 NEON DEFENSE', noGold:'能源不足!', equipReward:'🎁 波次獎勵裝備:{0} {1}', combined:'⚙ 合成了 {0} 件升星裝備', bought:'🛒 購買裝備:{0} {1}', curse:'☠ 詛咒纏身:{0} — {1}', buff:'✦ 強化:{0} — {1}', upgraded:'★ {0} 升級至 Lv.{1} ★', recycled:'回收 {0} (+{1}⚡)', waveStart:'◆ 第 {0} 波開始', bossWave:'◆◆ 第 {0} 波 — BOSS 波次來襲! ◆◆' },
     towers:{
       laser:{name:'雷射砲塔',desc:'快速單體攻擊'}, plasma:{name:'電漿砲',desc:'拋擲手雷 集中爆炸'},
       cryo:{name:'冰凍塔',desc:'範圍減速 80%(不疊加)'}, tesla:{name:'鏈電塔',desc:'閃電連鎖跳躍多個敵人'},
@@ -870,7 +885,8 @@ const I18N = {
     controls:['Pick a unit on the left, click an empty tile to place','Click a placed tower to upgrade, sell or equip it','Allied Mechs can be placed on the path to block enemies','<span>Endless mode</span>: survive longer for more score, Boss every 5 waves','Every 5 waves choose 1 of 3 <span>upgrades</span> (each carries a curse)','Each wave grants 1 <span>equipment</span> — equip/combine/buy in the Equipment menu','Railgun fires in a <span>straight line</span>; press R or the rotate button to turn','Keys 1-9 / 0 select units, Space starts the next wave'],
     title:{ sub:'// PIXEL SCI-FI TOWER DEFENSE //' },
     lang:{ label:'語言 / LANGUAGE' },
-    panel:{ status:'STATUS', build:'BUILD', equip:'EQUIPMENT', info:'UNIT INFO', log:'LOG' },
+    panel:{ status:'STATUS', build:'BUILD', equip:'EQUIPMENT', info:'UNIT INFO', log:'LOG', control:'CONTROL', fx:'BUFFS / CURSES' },
+    fxui:{ none:'No buffs or curses yet', buffs:'✦ Buffs', curses:'☠ Curses' },
     stat:{ lives:'Core Life', gold:'Energy ⚡', diff:'Difficulty', wave:'Wave', score:'Score', deploy:'Deployed', enemies:'Enemies Left' },
     btn:{ nextwave:'Next Wave', boss:'BOSS Wave', waveactive:'In progress…', auto:'Auto', buyslot:'Buy Slot +1', slotcap:'Slot cap reached', buybuff:'Buy Upgrade (1 of 2)', equiplib:'🎒 Equipment', combine:'⚙ Combine', combinenone:'⚙ Nothing to Combine', buyequip:'🛒 Buy Equip', close:'Close', unequip:'Unequip', upgrade:'Upgrade', maxed:'Maxed', sell:'Sell', rotate:'🔄 Railgun Dir', play:'START DEFENSE', restart:'Restart' },
     mute:{ on:'[ Sound: ON ]', off:'[ Sound: OFF ]' },
@@ -878,8 +894,8 @@ const I18N = {
     info:{ select:'Click a tower on the map to see info', range:'Range', dmg:'Damage', rate:'Fire Rate', chain:'Chain', targets:'targets', poison:'Poison', pct:'%HP/s', radius:'Radius', splash:'Splash', slow:'Slow', pierce:'Pierce', dmgbuff:'Dmg Buff', ratebuff:'Rate Buff', goldbonus:'Gold Bonus', status:'Status', nostack:'(no stack)', kill3:'Kill ×3', equip:'⚙ Equipment', equipped:'None equipped', tapEquip:'Tap an item below to equip:', noEquip:'No equipment available', placeHint:'Click {0} on the map to deploy', pathWord:'a path tile', emptyWord:'an empty tile' },
     equip:{ scope:'Scope', overclock:'Overclock Chip', warhead:'HE Warhead', critcore:'Crit Core', omni:'Omni Module', frost:'Frost Warhead' },
     equipEff:{ scope:'Range +{0}%', overclock:'Fire Rate +{0}%', warhead:'Damage +{0}%', critcore:'Crit {0}% · ×2 dmg', omni:'Range/Rate/Dmg +{0}% each', frost:'Damage +{0}% · slow 45% ({1}s)' },
-    modal:{ title:'EQUIPMENT', invHdr:'Inventory (pick an item, then a unit on the right)', noInv:'No equipment yet — 1 awarded each wave', selPrefix:'Selected: ', towerHdr:'Allied Units', noTower:'No units deployed yet', cur:'Current', none:'None', equipBtn:'Equip', buyEquipFull:'🛒 Buy Equipment (300⚡)', combineHint:'Every 3 of same type & star → combine into next star' },
-    log:{ welcome:'Welcome to NEON DEFENSE', noGold:'Not enough energy!', equipReward:'🎁 Wave reward: {0} {1}', combined:'⚙ Combined {0} item(s) into higher star', bought:'🛒 Bought equipment: {0} {1} (−300⚡)', curse:'☠ Cursed: {0} — {1}', buff:'✦ Upgrade: {0} — {1}', upgraded:'★ {0} upgraded to Lv.{1} ★', recycled:'Recycled {0} (+{1}⚡)', waveStart:'◆ Wave {0} begins', bossWave:'◆◆ Wave {0} — BOSS WAVE incoming! ◆◆' },
+    modal:{ title:'EQUIPMENT', invHdr:'Inventory (pick an item, then a unit on the right)', noInv:'No equipment yet — 1 awarded each wave', selPrefix:'Selected: ', towerHdr:'Allied Units', noTower:'No units deployed yet', cur:'Current', none:'None', equipBtn:'Equip', buyEquip:'🛒 Buy Equipment', each:'ea', combineHint:'Every 3 of same type & star → combine into next star' },
+    log:{ welcome:'Welcome to NEON DEFENSE', noGold:'Not enough energy!', equipReward:'🎁 Wave reward: {0} {1}', combined:'⚙ Combined {0} item(s) into higher star', bought:'🛒 Bought equipment: {0} {1}', curse:'☠ Cursed: {0} — {1}', buff:'✦ Upgrade: {0} — {1}', upgraded:'★ {0} upgraded to Lv.{1} ★', recycled:'Recycled {0} (+{1}⚡)', waveStart:'◆ Wave {0} begins', bossWave:'◆◆ Wave {0} — BOSS WAVE incoming! ◆◆' },
     towers:{
       laser:{name:'Laser Turret',desc:'Fast single-target'}, plasma:{name:'Plasma Cannon',desc:'Lobbed grenade, focused blast'},
       cryo:{name:'Cryo Tower',desc:'AOE slow 80% (no stack)'}, tesla:{name:'Tesla Coil',desc:'Chain lightning across enemies'},
@@ -899,7 +915,8 @@ const I18N = {
     controls:['左でユニットを選び、マップの空きマスに配置','配置済みの塔をクリックで強化・撤去・装備','味方メックは経路に置いて敵を阻止','<span>エンドレス</span>:長く耐えるほど高スコア、5ウェーブ毎にBoss','5ウェーブ毎に3択<span>強化</span>(各々に呪い付き)','毎ウェーブ<span>装備</span>を1件入手 — 装備庫で装着/合成/購入','レールガンは<span>直線攻撃</span>、Rか回転ボタンで方向転換','キー 1-9 / 0 でユニット選択、スペースで次ウェーブ'],
     title:{ sub:'// ピクセルSFタワーディフェンス //' },
     lang:{ label:'語言 / LANGUAGE' },
-    panel:{ status:'ステータス', build:'建造', equip:'装備', info:'ユニット情報', log:'ログ' },
+    panel:{ status:'ステータス', build:'建造', equip:'装備', info:'ユニット情報', log:'ログ', control:'操作', fx:'強化 / 呪い' },
+    fxui:{ none:'強化・呪いはまだありません', buffs:'✦ 強化', curses:'☠ 呪い' },
     stat:{ lives:'コアHP', gold:'エネルギー ⚡', diff:'難易度', wave:'ウェーブ', score:'スコア', deploy:'配置', enemies:'残り敵' },
     btn:{ nextwave:'次のウェーブ', boss:'BOSSウェーブ', waveactive:'進行中…', auto:'オート', buyslot:'配置枠 +1', slotcap:'配置枠が上限', buybuff:'強化購入 2択', equiplib:'🎒 装備庫', combine:'⚙ 合成', combinenone:'⚙ 合成不可', buyequip:'🛒 装備購入', close:'閉じる', unequip:'外す', upgrade:'強化', maxed:'最大Lv', sell:'撤去', rotate:'🔄 レールガン方向', play:'防衛開始', restart:'リスタート' },
     mute:{ on:'[ 音: オン ]', off:'[ 音: オフ ]' },
@@ -907,8 +924,8 @@ const I18N = {
     info:{ select:'マップ上の塔をクリックして情報表示', range:'射程', dmg:'ダメージ', rate:'連射', chain:'連鎖', targets:'体', poison:'毒', pct:'割合HP/s', radius:'範囲', splash:'爆風', slow:'減速', pierce:'貫通', dmgbuff:'ダメージ強化', ratebuff:'連射強化', goldbonus:'金銭ボーナス', status:'状態', nostack:'(重複なし)', kill3:'撃破 ×3', equip:'⚙ 装備', equipped:'未装備', tapEquip:'下の装備をタップして装着:', noEquip:'装着可能な装備なし', placeHint:'マップの{0}をクリックで配置', pathWord:'経路', emptyWord:'空きマス' },
     equip:{ scope:'スコープ', overclock:'オーバークロックチップ', warhead:'高爆弾頭', critcore:'クリティカルコア', omni:'オムニモジュール', frost:'氷結弾頭' },
     equipEff:{ scope:'射程 +{0}%', overclock:'連射 +{0}%', warhead:'ダメージ +{0}%', critcore:'会心率 {0}% · 会心ダメージ ×2', omni:'射程/連射/ダメージ 各 +{0}%', frost:'ダメージ +{0}% · 命中で減速 45% ({1}s)' },
-    modal:{ title:'装備庫 EQUIPMENT', invHdr:'在庫(1件選んでから右のユニットを装備)', noInv:'装備なし — 毎ウェーブ終了で1件入手', selPrefix:'選択中:', towerHdr:'味方ユニット', noTower:'ユニット未配置', cur:'現在', none:'なし', equipBtn:'装着', buyEquipFull:'🛒 装備購入 (300⚡)', combineHint:'同種同星3件 → 1つ上の星に合成' },
-    log:{ welcome:'NEON DEFENSE へようこそ', noGold:'エネルギー不足!', equipReward:'🎁 ウェーブ報酬:{0} {1}', combined:'⚙ {0} 件を上位星に合成', bought:'🛒 装備購入:{0} {1}(−300⚡)', curse:'☠ 呪い:{0} — {1}', buff:'✦ 強化:{0} — {1}', upgraded:'★ {0} を Lv.{1} に強化 ★', recycled:'撤去 {0} (+{1}⚡)', waveStart:'◆ ウェーブ {0} 開始', bossWave:'◆◆ ウェーブ {0} — BOSSウェーブ襲来! ◆◆' },
+    modal:{ title:'装備庫 EQUIPMENT', invHdr:'在庫(1件選んでから右のユニットを装備)', noInv:'装備なし — 毎ウェーブ終了で1件入手', selPrefix:'選択中:', towerHdr:'味方ユニット', noTower:'ユニット未配置', cur:'現在', none:'なし', equipBtn:'装着', buyEquip:'🛒 装備購入', each:'個', combineHint:'同種同星3件 → 1つ上の星に合成' },
+    log:{ welcome:'NEON DEFENSE へようこそ', noGold:'エネルギー不足!', equipReward:'🎁 ウェーブ報酬:{0} {1}', combined:'⚙ {0} 件を上位星に合成', bought:'🛒 装備購入:{0} {1}', curse:'☠ 呪い:{0} — {1}', buff:'✦ 強化:{0} — {1}', upgraded:'★ {0} を Lv.{1} に強化 ★', recycled:'撤去 {0} (+{1}⚡)', waveStart:'◆ ウェーブ {0} 開始', bossWave:'◆◆ ウェーブ {0} — BOSSウェーブ襲来! ◆◆' },
     towers:{
       laser:{name:'レーザー砲塔',desc:'高速単体攻撃'}, plasma:{name:'プラズマ砲',desc:'手榴弾投擲・集中爆発'},
       cryo:{name:'冷凍塔',desc:'範囲減速80%(重複なし)'}, tesla:{name:'連鎖電撃塔',desc:'複数の敵へ連鎖する稲妻'},
@@ -950,8 +967,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:50, range:120, dmg:34, fireRate:6},
       {cost:90, range:130, dmg:58, fireRate:7},
-      // v2.3 Lv4:成本 = 前一級 ×7;傷害/射速接近翻倍
-      {cost:630, range:140, dmg:110, fireRate:8.5}
+      // v2.6 Lv4:回歸正常成長幅度(延續每級增量,不再因高價而翻倍)
+      {cost:160, range:140, dmg:86, fireRate:8}
     ]
   },
   plasma: {
@@ -964,8 +981,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:100, range:195, dmg:50, fireRate:2.4, splash:102},
       {cost:160, range:225, dmg:90, fireRate:3.0, splash:133},
-      // v2.3 Lv4:成本 1120,傷害/射速接近翻倍,爆炸範圍 175
-      {cost:1120, range:255, dmg:175, fireRate:3.6, splash:175}
+      // v2.6 Lv4:回歸正常成長幅度
+      {cost:260, range:255, dmg:135, fireRate:3.6, splash:165}
     ]
   },
   cryo: {
@@ -975,8 +992,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:80,  range:140, dmg:8,  fireRate:4.5, splash: 80, slow: 0.8, slowDur: 0.8},
       {cost:120, range:160, dmg:14, fireRate:6.0, splash:110, slow: 0.8, slowDur: 0.8},
-      // v2.3 Lv4:成本 840,範圍進一步擴張、減速幅度 85%、持續更久
-      {cost:840, range:180, dmg:26, fireRate:8.0, splash:145, slow: 0.85, slowDur: 0.9}
+      // v2.6 Lv4:回歸正常成長幅度
+      {cost:180, range:180, dmg:22, fireRate:7.5, splash:140, slow: 0.8, slowDur: 0.85}
     ]
   },
   tesla: {
@@ -986,8 +1003,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:90,  range:128, dmg:38, fireRate:1.9, chainCount: 4},
       {cost:140, range:138, dmg:66, fireRate:2.3, chainCount: 5},
-      // v2.3 Lv4:成本 980,主目標 +6 連鎖(共 7 目標),傷害接近翻倍
-      {cost:980, range:150, dmg:120, fireRate:2.8, chainCount: 6}
+      // v2.6 Lv4:回歸正常成長幅度(主目標 +6 連鎖,共 7 目標)
+      {cost:220, range:148, dmg:100, fireRate:2.7, chainCount: 6}
     ]
   },
   rail: {
@@ -999,8 +1016,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:150, range:2000, dmg:128, fireRate:0.9, pierce:999},
       {cost:220, range:2000, dmg:220, fireRate:1.15, pierce:999},
-      // v2.3 Lv4:成本 1540,傷害接近翻倍、射速 1.4
-      {cost:1540, range:2000, dmg:380, fireRate:1.4, pierce:999}
+      // v2.6 Lv4:回歸正常成長幅度
+      {cost:320, range:2000, dmg:330, fireRate:1.4, pierce:999}
     ]
   },
   mech: {
@@ -1011,8 +1028,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:80,  range:65, dmg:15, fireRate:2.5, hp:1050, waveHealPct:0.30},
       {cost:130, range:70, dmg:28, fireRate:3.5, hp:1650, waveHealPct:0.50},
-      // v2.3 Lv4:成本 910,HP 與傷害接近翻倍、波末回血 70%
-      {cost:910, range:75, dmg:55, fireRate:4.5, hp:2700, waveHealPct:0.70}
+      // v2.6 Lv4:回歸正常成長幅度
+      {cost:210, range:75, dmg:43, fireRate:4.5, hp:2300, waveHealPct:0.70}
     ]
   },
   command: {
@@ -1024,8 +1041,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:110, range:155, dmgBonus: 0.20, fireRateBonus: 0.16},
       {cost:170, range:170, dmgBonus: 0.30, fireRateBonus: 0.24},
-      // v2.3 Lv4:成本 1190,增益接近翻倍(+45% / +36%) — 仍不疊加
-      {cost:1190, range:190, dmgBonus: 0.45, fireRateBonus: 0.36}
+      // v2.6 Lv4:回歸正常成長幅度(仍不疊加)
+      {cost:260, range:185, dmgBonus: 0.40, fireRateBonus: 0.32}
     ]
   },
   sniper: {
@@ -1035,8 +1052,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:115, range:340, dmg:155, fireRate:1.1},
       {cost:180, range:400, dmg:280, fireRate:1.3},
-      // v2.3 Lv4:成本 1260,傷害接近翻倍、射程 460
-      {cost:1260, range:460, dmg:500, fireRate:1.55}
+      // v2.6 Lv4:回歸正常成長幅度
+      {cost:280, range:460, dmg:430, fireRate:1.5}
     ]
   },
   poison: {
@@ -1047,8 +1064,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:85,  range:128, dmg:11, fireRate:2.5, poison:28, poisonDur:3.5},
       {cost:140, range:138, dmg:17, fireRate:3.0, poison:48, poisonDur:4.0},
-      // v2.3 Lv4:成本 980,毒素強化至 75/s × 4.5s
-      {cost:980, range:150, dmg:28, fireRate:3.6, poison:75, poisonDur:4.5}
+      // v2.6 Lv4:回歸正常成長幅度
+      {cost:230, range:148, dmg:24, fireRate:3.5, poison:70, poisonDur:4.5}
     ]
   },
   greed: {
@@ -1058,8 +1075,8 @@ const TOWER_DEFS = {
     upgrades:[
       {cost:200, range:160},
       {cost:300, range:195},
-      // v2.4 Lv4:成本 1400,範圍 235(全圖覆蓋型猥瑣發育)
-      {cost:1400, range:235}
+      // v2.6 Lv4:回歸正常成長幅度(成本延續曲線)
+      {cost:450, range:230}
     ]
   }
 };
@@ -1127,7 +1144,8 @@ function rollEquipmentStar(wave) {
   for (let s = 1; s <= 5; s++) { r -= weights[s]; if (r <= 0) return s; }
   return 1;
 }
-const EQUIP_BUY_COST = 300; // v2.5:購買 1 件一星裝備的能源花費
+const EQUIP_BUY_COST = 500; // v2.6:購買 1 件一星裝備的能源花費(300 → 500)
+const EQUIP_BUY_COUNTS = [1, 50, 1000]; // v2.6:可一次購買的數量選項
 let equipModalSel = null;   // v2.5:裝備庫彈窗中目前選取的裝備 uid
 function grantEquipment(wave) {
   const star = rollEquipmentStar(wave);
@@ -1136,13 +1154,17 @@ function grantEquipment(wave) {
   log(tf('log.equipReward', EQUIP_DEFS[type].icon + equipName(type), '★'.repeat(star)), 'e-good');
   refreshEquipUI();
 }
-// v2.5:花 300⚡ 購買 1 件一星裝備(類型隨機)
-function buyEquipment() {
-  if (Game.gold < EQUIP_BUY_COST || Game.ended) return;
-  Game.gold -= EQUIP_BUY_COST;
-  const type = EQUIP_TYPES[Math.floor(Math.random() * EQUIP_TYPES.length)];
-  Game.inventory.push({ uid: Game.equipUid++, type, star: 1, assigned: false });
-  log(tf('log.bought', EQUIP_DEFS[type].icon + equipName(type), '★'), 'e-good');
+// v2.6:花 500⚡/件 購買 count 件一星裝備(類型各自隨機)
+function buyEquipment(count) {
+  count = count || 1;
+  const total = EQUIP_BUY_COST * count;
+  if (Game.gold < total || Game.ended) return;
+  Game.gold -= total;
+  for (let i = 0; i < count; i++) {
+    const type = EQUIP_TYPES[Math.floor(Math.random() * EQUIP_TYPES.length)];
+    Game.inventory.push({ uid: Game.equipUid++, type, star: 1, assigned: false });
+  }
+  log(tf('log.bought', count + ' × 1★', `(−${total}⚡)`), 'e-good');
   AudioFX.place();
   refreshEquipUI();
   updateUI();
@@ -1200,13 +1222,17 @@ function renderEquipModal() {
   // 標題與靜態文字
   document.getElementById('em-title').textContent = t('modal.title');
   document.getElementById('em-close').textContent = t('btn.close');
-  document.getElementById('em-buy').textContent = `${t('modal.buyEquipFull')}`.replace('300', EQUIP_BUY_COST);
+  document.getElementById('em-buy-label').textContent = `${t('modal.buyEquip')} (${EQUIP_BUY_COST}⚡/${t('modal.each')})`;
   document.getElementById('em-combine-hint').textContent = t('modal.combineHint');
   document.getElementById('em-inv-hdr').textContent = t('modal.invHdr');
   document.getElementById('em-tower-hdr').textContent = t('modal.towerHdr');
-  // 購買 / 合成按鈕狀態
-  const buyBtn = document.getElementById('em-buy');
-  buyBtn.disabled = Game.gold < EQUIP_BUY_COST || Game.ended;
+  // 購買按鈕(×1 / ×50 / ×1000)— 能源不足或結束時禁用
+  document.querySelectorAll('.em-buy-btn').forEach(b => {
+    const n = parseInt(b.dataset.count);
+    b.disabled = Game.gold < EQUIP_BUY_COST * n || Game.ended;
+    b.textContent = `×${n}`;
+  });
+  // 合成按鈕狀態
   const cn = combinableCount();
   const cbtn = document.getElementById('em-combine');
   cbtn.disabled = cn === 0;
@@ -1446,6 +1472,7 @@ function applyCurse(id) {
   Game.debuffs.push(d);
   recomputeFx();
   log(tf('log.curse', curseName(d.id), curseDesc(d.id)), 'e-bad');
+  renderFxStatus();
 }
 
 // v1.3 每 5 波玩家 3 選 1 強化池(玩家選定:砲台強化 / 核心防禦 / 特殊效果)
@@ -1488,6 +1515,7 @@ function applyBuff(id) {
   }
   recomputeFx();
   log(tf('log.buff', buffName(b.id), buffDesc(b.id)), 'e-good');
+  renderFxStatus();
   updateUI();
 }
 // v1.5:抽出 n 張卡片,每張卡片 = 一個強化 + 一個綁定詛咒
@@ -4041,42 +4069,7 @@ function render() {
     ctx.font = 'bold 13px Courier New';
     ctx.fillText(`自動下一波:${Math.ceil(Game.autoCountdown)}s`, 12, 40);
   }
-  // v1.2 BOSS 詛咒列表(畫面右上角)
-  if (Game.debuffs.length) {
-    const counts = {};
-    for (const d of Game.debuffs) counts[d.id] = (counts[d.id]||0)+1;
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#ff4d6d';
-    ctx.font = 'bold 11px Courier New';
-    ctx.fillText(`☠ 詛咒 ×${Game.debuffs.length}`, W-10, 16);
-    ctx.font = '10px Courier New';
-    let yy = 30;
-    for (const id in counts) {
-      const d = DEBUFF_POOL.find(x => x.id === id);
-      ctx.fillStyle = '#ffb0b0';
-      ctx.fillText(`${d.name}${counts[id]>1?' ×'+counts[id]:''} — ${d.desc}`, W-10, yy);
-      yy += 13;
-    }
-    ctx.textAlign = 'left';
-  }
-  // v1.3 強化列表(畫面右下角)
-  if (Game.buffs.length) {
-    const bc = {};
-    for (const b of Game.buffs) bc[b.name] = (bc[b.name]||0)+1;
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#00ff88';
-    ctx.font = 'bold 11px Courier New';
-    const names = Object.keys(bc);
-    let by = H - 8 - names.length*13;
-    ctx.fillText(`✦ 強化 ×${Game.buffs.length}`, W-10, by - 4);
-    ctx.font = '10px Courier New';
-    ctx.fillStyle = '#9fe8c0';
-    for (const nm of names) {
-      ctx.fillText(`${nm}${bc[nm]>1?' ×'+bc[nm]:''}`, W-10, by);
-      by += 13;
-    }
-    ctx.textAlign = 'left';
-  }
+  // v2.7:強化/詛咒已改為右側 HTML 面板顯示(renderFxStatus),不再畫在 canvas 上
   document.getElementById('ui-enemies').textContent = Game.enemies.filter(e=>!e.dead && !e.reachedEnd).length + Game.spawnQueue.length;
 }
 
@@ -4194,6 +4187,26 @@ function updateUI() {
     bbBtn.disabled = Game.gold < BUFF_COST || Game.ended;
     bbBtn.textContent = `${t('btn.buybuff')}(${BUFF_COST}⚡)`;
   }
+  renderFxStatus();
+}
+// v2.7:右側「強化 / 詛咒」狀態面板 — 清楚列出已累積的強化與詛咒(含層數與效果)
+function renderFxStatus() {
+  const el = document.getElementById('fx-body');
+  if (!el) return;
+  let html = '';
+  if (Game.buffs.length) {
+    const bc = {};
+    for (const b of Game.buffs) bc[b.id] = (bc[b.id]||0)+1;
+    html += `<div style="color:#7CFFB0; font-weight:bold; margin-bottom:2px;">${t('fxui.buffs')} ×${Game.buffs.length}</div>`;
+    for (const id in bc) html += `<div style="color:#9fe8c0; padding:1px 0;">• ${buffName(id)}${bc[id]>1?' ×'+bc[id]:''} <span style="color:#6fbf90;">— ${buffDesc(id)}</span></div>`;
+  }
+  if (Game.debuffs.length) {
+    const cc = {};
+    for (const d of Game.debuffs) cc[d.id] = (cc[d.id]||0)+1;
+    html += `<div style="color:#ff7088; font-weight:bold; margin:5px 0 2px;">${t('fxui.curses')} ×${Game.debuffs.length}</div>`;
+    for (const id in cc) html += `<div style="color:#ffb0b0; padding:1px 0;">• ${curseName(id)}${cc[id]>1?' ×'+cc[id]:''} <span style="color:#cf8a96;">— ${curseDesc(id)}</span></div>`;
+  }
+  el.innerHTML = html || `<div style="color:#667;">${t('fxui.none')}</div>`;
 }
 function updateTowerInfo() {
   const body = document.getElementById('tower-info-body');
@@ -4480,7 +4493,9 @@ document.addEventListener('keydown', e => {
 // ---------------- v2.5 裝備庫彈窗 + 語言 事件 ----------------
 document.getElementById('equiplib-btn').addEventListener('click', openEquipModal);
 document.getElementById('em-close').addEventListener('click', closeEquipModal);
-document.getElementById('em-buy').addEventListener('click', buyEquipment);
+document.querySelectorAll('.em-buy-btn').forEach(b => {
+  b.addEventListener('click', () => { buyEquipment(parseInt(b.dataset.count)); renderEquipModal(); });
+});
 document.getElementById('em-combine').addEventListener('click', combineEquip);
 document.getElementById('equip-modal').addEventListener('click', (e) => {
   if (e.target.id === 'equip-modal') closeEquipModal(); // 點背景關閉
@@ -4511,6 +4526,8 @@ function applyLang() {
   setText('h-build', t('panel.build'));
   setText('h-info', t('panel.info'));
   setText('h-log', t('panel.log'));
+  setText('h-control', t('panel.control'));
+  setText('h-fx', t('panel.fx'));
   setText('l-lives', t('stat.lives'));
   setText('l-gold', t('stat.gold'));
   setText('l-diff', t('stat.diff'));
@@ -4528,6 +4545,7 @@ function applyLang() {
   updateTowerInfo();
   updateRotateBtn();
   refreshEquipUI();
+  renderFxStatus();
 }
 
 // ---------------- Init ----------------
